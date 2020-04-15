@@ -1,0 +1,13 @@
+[package]
+name = "rust-dmr-mal"
+version = "0.1.0"
+authors = ["David Robertson <david.m.robertson1@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+
+[[bin]]
+name = "step0_repl"
