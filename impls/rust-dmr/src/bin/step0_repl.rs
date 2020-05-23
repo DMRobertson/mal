@@ -8,11 +8,11 @@ fn eval(line: &str) -> &str {
     line
 }
 
-fn print(line: &str) -> &str {
-    line
+fn print(line: &str) -> String {
+    String::from(line)
 }
 
-fn rep(line: &str) -> &str {
+fn rep(line: &str) -> String {
     print(eval(read(&line)))
 }
 

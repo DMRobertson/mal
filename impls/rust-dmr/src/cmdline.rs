@@ -27,7 +27,7 @@ pub fn save_history<T: Terminal>(interface: &Interface<T>) -> std::io::Result<()
     }
 }
 
-pub fn repl<T: Terminal>(interface: &Interface<T>, processor: impl Fn(&str) -> &str) {
+pub fn repl<T: Terminal>(interface: &Interface<T>, processor: fn(&str) -> String) {
     loop {
         match interface.read_line() {
             Ok(ReadResult::Eof) => break,
