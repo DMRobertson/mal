@@ -11,6 +11,7 @@ pub enum ReadError {
     NoMoreTokens,
     UnbalancedList,
     ReadIntError,
+    ReadComment,
 }
 
 pub type Result = std::result::Result<MalObject, ReadError>;
@@ -27,6 +28,7 @@ fn read_form(reader: &mut Reader) -> Result {
         Some(Token::OpenRoundBracket) => read_list(reader),
         Some(Token::PlainChars(_)) => read_atom(reader),
         Some(Token::StringLiteral(s)) => Ok(build_string(s)),
+        Some(Token::Comment(_)) => Err(ReadError::ReadComment),
         Some(token) => unimplemented!("Not implemented: {:?}", token),
         None => Err(ReadError::NoMoreTokens),
     }

@@ -96,8 +96,7 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, TokenizerError> {
         let caps = TOKEN_RE
             .captures(input)
             .ok_or(TokenizerError::NoCapture(String::from(input)))?;
-        let token = create_token(caps.get(1).unwrap().as_str())
-            .expect(&format!("create_token failed with input={:?}", input));
+        let token = create_token(caps.get(1).unwrap().as_str())?;
         tokens.push(token);
         input = &input[caps.get(0).unwrap().end()..];
     }
