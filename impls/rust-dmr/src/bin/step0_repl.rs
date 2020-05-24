@@ -12,8 +12,8 @@ fn print(line: &str) -> String {
     String::from(line)
 }
 
-fn rep(line: &str) -> String {
-    print(eval(read(&line)))
+fn rep(line: &str) -> Result<String, String> {
+    Ok(print(eval(read(&line))))
 }
 
 fn main() -> std::io::Result<()> {

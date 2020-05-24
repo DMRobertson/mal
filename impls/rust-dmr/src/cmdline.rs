@@ -27,16 +27,20 @@ pub fn save_history<T: Terminal>(interface: &Interface<T>) -> std::io::Result<()
     }
 }
 
-pub fn repl<T: Terminal>(interface: &Interface<T>, processor: fn(&str) -> String) {
+pub fn repl<T: Terminal>(interface: &Interface<T>, processor: fn(&str) -> Result<String, String>) {
     loop {
         match interface.read_line() {
             Ok(ReadResult::Eof) => break,
             Ok(ReadResult::Signal(sig)) => {
                 writeln!(interface, "Received signal {:?}", sig).ok();
             }
+            Ok(ReadResult::Input(line)) if line.len() == 0 => continue,
             Ok(ReadResult::Input(line)) => {
                 interface.add_history_unique(line.clone());
-                writeln!(interface, "{}", processor(&line)).ok();
+                match processor(&line) {
+                    Ok(s) => writeln!(interface, "{}", s).ok(),
+                    Err(e) => writeln!(interface, "{}", e).ok(),
+                };
             }
             Err(e) => {
                 writeln!(interface, "Error: {}", e).ok();
