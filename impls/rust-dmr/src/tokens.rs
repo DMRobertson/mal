@@ -1,25 +1,35 @@
 use regex::Regex;
 use std::fmt;
 
-#[derive(Debug, Eq, PartialEq)]
-pub enum SpecialChar {
-    OpenSquareBracket,
-    CloseSquareBracket,
-    OpenBraceBracket,
-    CloseBraceBracket,
-    OpenRoundBracket,
-    CloseRoundBracket,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Close {
+    Vector,
+    Map,
+    List,
+}
+
+#[derive(Debug)]
+pub enum Open {
+    Vector,
+    Map,
+    List,
+}
+
+#[derive(Debug)]
+pub enum UnaryOp {
     Quote,
-    Backtick,
-    Tilde,
-    Caret,
-    AtSign,
+    Quasiquote,
+    Unquote,
+    WithMeta,
+    Deref,
+    SpliceUnquote,
 }
 
 #[derive(Debug)]
 pub enum Token<'a> {
-    SpliceUnquote,
-    SpecialChar(SpecialChar),
+    Open(Open),
+    Close(Close),
+    UnaryOp(UnaryOp),
     StringLiteral(&'a str),
     Comment(&'a str),
     PlainChars(&'a str),
@@ -35,44 +45,42 @@ pub enum TokenizerError {
 
 impl fmt::Display for TokenizerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "tokenizer failed: {}",
-            match self {
-                TokenizerError::NoFirstCharacter => "no characters to parse token from",
-                TokenizerError::BadTildeMatch => "bad tilde match",
-                TokenizerError::UnbalancedString => "unbalanced string literal",
-                TokenizerError::NoCapture(_) => "token regex did not capture a token",
-            }
-        )
+        write!(f, "tokenizer failed: ")?;
+        match self {
+            TokenizerError::NoFirstCharacter => write!(f, "no characters to parse token from"),
+            TokenizerError::BadTildeMatch => write!(f, "bad tilde match"),
+            TokenizerError::UnbalancedString => write!(f, "unbalanced string literal"),
+            TokenizerError::NoCapture(_) => write!(f, "token regex did not capture a token"),
+        }
     }
 }
 
 fn create_token(captured: &str) -> Result<Token, TokenizerError> {
-    use SpecialChar::*;
+    use UnaryOp::*;
+
     let bytes = captured.as_bytes();
     let first_char = bytes.first().ok_or(TokenizerError::NoFirstCharacter)?;
     match first_char {
         // Splice unquote and special chars
         b'~' => {
             if bytes.len() == 1 {
-                Ok(Token::SpecialChar(Tilde))
+                Ok(Token::UnaryOp(Unquote))
             } else if let Some(b'@') = bytes.get(1) {
-                Ok(Token::SpliceUnquote)
+                Ok(Token::UnaryOp(SpliceUnquote))
             } else {
                 Err(TokenizerError::BadTildeMatch)
             }
         }
-        b'[' => Ok(Token::SpecialChar(OpenSquareBracket)),
-        b'{' => Ok(Token::SpecialChar(OpenBraceBracket)),
-        b'(' => Ok(Token::SpecialChar(OpenRoundBracket)),
-        b']' => Ok(Token::SpecialChar(CloseSquareBracket)),
-        b'}' => Ok(Token::SpecialChar(CloseBraceBracket)),
-        b')' => Ok(Token::SpecialChar(CloseRoundBracket)),
-        b'\'' => Ok(Token::SpecialChar(Quote)),
-        b'`' => Ok(Token::SpecialChar(Backtick)),
-        b'^' => Ok(Token::SpecialChar(Caret)),
-        b'@' => Ok(Token::SpecialChar(AtSign)),
+        b'[' => Ok(Token::Open(Open::Vector)),
+        b'{' => Ok(Token::Open(Open::Map)),
+        b'(' => Ok(Token::Open(Open::List)),
+        b']' => Ok(Token::Close(Close::Vector)),
+        b'}' => Ok(Token::Close(Close::Map)),
+        b')' => Ok(Token::Close(Close::List)),
+        b'\'' => Ok(Token::UnaryOp(Quote)),
+        b'`' => Ok(Token::UnaryOp(Quasiquote)),
+        b'^' => Ok(Token::UnaryOp(WithMeta)),
+        b'@' => Ok(Token::UnaryOp(Deref)),
         // String literal
         b'"' => tokenize_string_literal(bytes),
         // Comment. Note that ; is ASCII so safe to slice on bytes even if the rest of the string is

@@ -1,5 +1,6 @@
-use crate::tokens::{tokenize, SpecialChar, Token, TokenizerError};
-use crate::types::MalObject;
+use crate::tokens;
+use crate::tokens::{tokenize, Close, Token, TokenizerError};
+use crate::types::{MalList, MalObject};
 use std::iter::Peekable;
 use std::{fmt, slice};
 
@@ -12,26 +13,26 @@ pub enum ReadError {
     UnbalancedSequence,
     ReadIntError,
     ReadComment,
-    UnexpectedSpecialChar, // TODO include the actual char here as payload
+    UnexpectedCloseToken(tokens::Close),
+    Unimplemented,
 }
 
 impl fmt::Display for ReadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Read error: {}",
-            match self {
-                Self::TokenizerError(e) => format!("{}", e),
-                Self::NoMoreTokens =>
-                    String::from("ran out of tokens while scanning for a compound type."),
-                Self::UnbalancedSequence =>
-                    String::from("unbalanced sequence: list or vector missing a closing bracket."),
-                Self::ReadIntError => String::from("failed to parse integer."),
-                Self::ReadComment => String::from("read a comment instead of object"),
-                Self::UnexpectedSpecialChar =>
-                    String::from("unexpected special character while parsing"),
-            }
-        )
+        use ReadError::*;
+        write!(f, "Read error: ")?;
+        match self {
+            TokenizerError(e) => write!(f, "{}", e),
+            NoMoreTokens => write!(f, "ran out of tokens while scanning for a form."),
+            UnbalancedSequence => write!(
+                f,
+                "unbalanced sequence: list or vector missing a closing bracket."
+            ),
+            ReadIntError => write!(f, "failed to parse integer."),
+            ReadComment => write!(f, "read a comment instead of object"),
+            UnexpectedCloseToken(c) => write!(f, "unexpected close token {:?} while parsing", c),
+            Unimplemented => write!(f, "haven't implemented this yet, but no need to panic!()"),
+        }
     }
 }
 
@@ -45,33 +46,39 @@ pub fn read_str(input: &str) -> Result {
 }
 
 fn read_form(reader: &mut Reader) -> Result {
+    use crate::tokens::Open::*;
+    use crate::tokens::UnaryOp::*;
+
     let token = reader.next().ok_or(ReadError::NoMoreTokens)?;
     log::debug!("read_form, token={:?}", token);
-    use SpecialChar::*;
     match token {
-        Token::SpecialChar(OpenRoundBracket) => read_list(reader),
-        Token::SpecialChar(OpenSquareBracket) => read_vector(reader),
-        Token::SpecialChar(CloseRoundBracket)
-        | Token::SpecialChar(CloseSquareBracket)
-        | Token::SpecialChar(CloseBraceBracket) => Err(ReadError::UnexpectedSpecialChar),
+        Token::Open(List) => read_list(reader),
+        Token::Open(Vector) => read_vector(reader),
+        Token::Close(kind) => Err(ReadError::UnexpectedCloseToken(*kind)),
         Token::PlainChars(_) => read_atom(token),
         Token::StringLiteral(s) => Ok(build_string(s)),
         Token::Comment(_) => Err(ReadError::ReadComment),
-        token => unimplemented!("Not implemented: {:?}", token),
+        Token::UnaryOp(Quote) => read_unary_operand(reader, "quote"),
+        Token::UnaryOp(Quasiquote) => read_unary_operand(reader, "quasiquote"),
+        Token::UnaryOp(Unquote) => read_unary_operand(reader, "unquote"),
+        Token::UnaryOp(Deref) => read_unary_operand(reader, "deref"),
+        Token::UnaryOp(SpliceUnquote) => read_unary_operand(reader, "splice-unquote"),
+        Token::UnaryOp(WithMeta) => read_with_meta(reader),
+        _token => Err(ReadError::Unimplemented),
     }
 }
 
 fn read_list(reader: &mut Reader) -> Result {
-    read_sequence(reader, SpecialChar::CloseRoundBracket).map(MalObject::List)
+    read_sequence(reader, Close::List).map(MalObject::List)
 }
 
 fn read_vector(reader: &mut Reader) -> Result {
-    read_sequence(reader, SpecialChar::CloseRoundBracket).map(MalObject::Vector)
+    read_sequence(reader, Close::Vector).map(MalObject::Vector)
 }
 
 fn read_sequence(
     reader: &mut Reader,
-    closing_token: SpecialChar,
+    closing_token: Close,
 ) -> std::result::Result<Vec<MalObject>, ReadError> {
     log::debug!("read_sequence, looking for {:?}", closing_token);
     let mut elements = Vec::<MalObject>::new();
@@ -79,7 +86,7 @@ fn read_sequence(
     loop {
         log::debug!("read_sequence, token={:?}", reader.peek());
         match reader.peek() {
-            Some(Token::SpecialChar(c)) if *c == closing_token => {
+            Some(Token::Close(c)) if *c == closing_token => {
                 reader.next();
                 break;
             }
@@ -130,4 +137,21 @@ fn build_symbol(chars: &str) -> MalObject {
 
 fn build_string(chars: &str) -> MalObject {
     MalObject::String(String::from(chars))
+}
+
+fn read_unary_operand(reader: &mut Reader, opname: &str) -> Result {
+    let mut list = MalList::new();
+    list.push(build_symbol(opname));
+    list.push(read_form(reader)?);
+    Ok(MalObject::List(list))
+}
+
+fn read_with_meta(reader: &mut Reader) -> Result {
+    let mut list = MalList::new();
+    list.push(build_symbol("with-meta"));
+    let first = read_form(reader)?;
+    let second = read_form(reader)?;
+    list.push(second);
+    list.push(first);
+    Ok(MalObject::List(list))
 }
