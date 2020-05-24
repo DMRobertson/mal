@@ -1,6 +1,6 @@
 use crate::tokens;
 use crate::tokens::{tokenize, Close, Token, TokenizerError};
-use crate::types::{MalList, MalObject};
+use crate::types::{build_map, MalList, MalObject, MapError};
 use std::iter::Peekable;
 use std::{fmt, slice};
 
@@ -15,6 +15,7 @@ pub enum ReadError {
     ReadComment,
     UnexpectedCloseToken(tokens::Close),
     Unimplemented,
+    ReadMapError(MapError),
 }
 
 impl fmt::Display for ReadError {
@@ -30,7 +31,8 @@ impl fmt::Display for ReadError {
             ),
             ReadIntError => write!(f, "failed to parse integer."),
             ReadComment => write!(f, "read a comment instead of object"),
-            UnexpectedCloseToken(c) => write!(f, "unexpected close token {:?} while parsing", c),
+            UnexpectedCloseToken(c) => write!(f, "unexpected Close::{:?} token while parsing", c),
+            ReadMapError(e) => write!(f, "{:?}", e),
             Unimplemented => write!(f, "haven't implemented this yet, but no need to panic!()"),
         }
     }
@@ -54,6 +56,7 @@ fn read_form(reader: &mut Reader) -> Result {
     match token {
         Token::Open(List) => read_list(reader),
         Token::Open(Vector) => read_vector(reader),
+        Token::Open(Map) => read_map(reader),
         Token::Close(kind) => Err(ReadError::UnexpectedCloseToken(*kind)),
         Token::PlainChars(_) => read_atom(token),
         Token::StringLiteral(s) => Ok(build_string(s)),
@@ -64,7 +67,6 @@ fn read_form(reader: &mut Reader) -> Result {
         Token::UnaryOp(Deref) => read_unary_operand(reader, "deref"),
         Token::UnaryOp(SpliceUnquote) => read_unary_operand(reader, "splice-unquote"),
         Token::UnaryOp(WithMeta) => read_with_meta(reader),
-        _token => Err(ReadError::Unimplemented),
     }
 }
 
@@ -74,6 +76,13 @@ fn read_list(reader: &mut Reader) -> Result {
 
 fn read_vector(reader: &mut Reader) -> Result {
     read_sequence(reader, Close::Vector).map(MalObject::Vector)
+}
+
+fn read_map(reader: &mut Reader) -> Result {
+    let entries = read_sequence(reader, Close::Map)?;
+    build_map(entries)
+        .map(MalObject::Map)
+        .map_err(ReadError::ReadMapError)
 }
 
 fn read_sequence(
