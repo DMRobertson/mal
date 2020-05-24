@@ -1,2 +1,2 @@
 #!/bin/bash
-target/release/${STEP:-stepA_mal} "${@}"
+cargo run --release --bin ${STEP:-stepA_mal} "${@}"
