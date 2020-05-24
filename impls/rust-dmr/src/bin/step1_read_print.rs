@@ -17,6 +17,7 @@ fn rep(line: &str) -> String {
 }
 
 fn main() -> std::io::Result<()> {
+    pretty_env_logger::init();
     let interface = cmdline::setup()?;
     cmdline::repl(&interface, rep);
     cmdline::save_history(&interface)?;

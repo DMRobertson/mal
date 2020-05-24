@@ -12,6 +12,5 @@ dirs = "2.0.2"
 regex = "1.3.7"
 lazy_static = "1.4.0"
 itertools = "0.9.0"
-
-[[bin]]
-name = "step0_repl"
+log = { version= "0.4.8", features=["std", "release_max_level_off"] }
+pretty_env_logger = "0.4"
