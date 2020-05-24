@@ -1,2 +1,2 @@
 #!/bin/bash
-target/debug/${STEP:-stepA_mal} "${@}"
+target/release/${STEP:-stepA_mal} "${@}"
