@@ -22,15 +22,16 @@ pub enum Token<'a> {
 }
 
 #[derive(Debug)]
-pub enum TokenCreationError {
+pub enum TokenizerError {
     NoFirstCharacter,
     BadTildeMatch,
     UnclosedString,
+    NoCapture(String),
 }
 
-fn create_token(captured: &str) -> Result<Token, TokenCreationError> {
+fn create_token(captured: &str) -> Result<Token, TokenizerError> {
     let mut chars = captured.chars();
-    let first_char = chars.next().ok_or(TokenCreationError::NoFirstCharacter)?;
+    let first_char = chars.next().ok_or(TokenizerError::NoFirstCharacter)?;
     match first_char {
         // Splice unquote and special chars
         '~' => {
@@ -39,7 +40,7 @@ fn create_token(captured: &str) -> Result<Token, TokenCreationError> {
             } else if let Some('@') = chars.next() {
                 Ok(Token::SpliceUnquote)
             } else {
-                Err(TokenCreationError::BadTildeMatch)
+                Err(TokenizerError::BadTildeMatch)
             }
         }
         '[' => Ok(Token::OpenSquareBracket),
@@ -57,9 +58,9 @@ fn create_token(captured: &str) -> Result<Token, TokenCreationError> {
             Some('"') => {
                 // Assuming UTf-8 encoded, first and last bytes will be ASCII ", so safe to
                 // slice on bytes even if rest of the string is non ASCII.
-                Ok(Token::StringLiteral(&captured[1..captured.len()]))
+                Ok(Token::StringLiteral(&captured[1..captured.len() - 1]))
             }
-            _ => Err(TokenCreationError::UnclosedString),
+            _ => Err(TokenizerError::UnclosedString),
         },
         // Comment. Note that ; is ASCII so safe to slice on bytes even if the rest of the string is
         // non ASCII.
@@ -68,36 +69,37 @@ fn create_token(captured: &str) -> Result<Token, TokenCreationError> {
     }
 }
 
-#[derive(Debug)]
-pub enum TokenizerError {
-    Creation(TokenCreationError),
-    NoTokens,
-}
-
 pub fn tokenize(input: &str) -> Result<Vec<Token>, TokenizerError> {
     lazy_static! {
         static ref TOKEN_RE: Regex = Regex::new(
-            r#"(?x)                          # ignore whitespace and allow comments
+            r#"(?x)                          # ignore whitespace in this patern & allow comments
                 [\s,]*                       # whitespace or commas, ignored
                 (                            # token capture group
                     ~@                       # literal splice-unquote 
                     |[\[\]{}()'`~^@]         # single special characters
-                    |"(?:                    # string literal:
-                        \\.|[^\\"]           #    quotes escaped by backslashes 
-                    )*\\"?                   #    possibly missing a closing quote
+                    |"(?:                    # string literal. its contents, not captured, include:
+                        \\.                  #    escapes
+                        |[^\\"]              #    anything which isn't a backslash or a quote 
+                      )*
+                      "?                     #    possibly missing a closing quote
                     |;.*                     # comments
                     |[^\s\[\]{}('\\"`,;)]*   # zero or more plain characters
-                )"#
+                )
+                [\s,]*                       # whitespace or commas, ignored
+            "#
         )
         .unwrap();
     }
-
-    let mut captures = TOKEN_RE.captures_iter(input).peekable();
-    captures.peek().ok_or(TokenizerError::NoTokens)?;
-    let result = captures
-        .map(|captures| captures.get(0).unwrap().as_str())
-        .map(create_token)
-        .collect::<Result<Vec<Token>, TokenCreationError>>()
-        .map_err(|e| TokenizerError::Creation(e));
-    result
+    let mut input = input;
+    let mut tokens = Vec::new();
+    while input.len() > 0 {
+        let caps = TOKEN_RE
+            .captures(input)
+            .ok_or(TokenizerError::NoCapture(String::from(input)))?;
+        let token = create_token(caps.get(1).unwrap().as_str())
+            .expect(&format!("create_token failed with input={:?}", input));
+        tokens.push(token);
+        input = &input[caps.get(0).unwrap().end()..];
+    }
+    Ok(tokens)
 }
