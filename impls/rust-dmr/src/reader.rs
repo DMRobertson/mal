@@ -123,6 +123,7 @@ fn read_plain_chars(chars: &str) -> Result {
             _ => Ok(build_symbol(chars)),
         },
         c if ascii_digit(c) => read_int(chars),
+        ':' => Ok(build_keyword(&chars[1..])),
         _ => Ok(build_symbol(chars)),
     }
 }
@@ -146,6 +147,10 @@ fn build_symbol(chars: &str) -> MalObject {
 
 fn build_string(chars: &str) -> MalObject {
     MalObject::String(String::from(chars))
+}
+
+fn build_keyword(chars: &str) -> MalObject {
+    MalObject::Keyword(String::from(chars))
 }
 
 fn read_unary_operand(reader: &mut Reader, opname: &str) -> Result {

@@ -13,7 +13,8 @@ pub fn pr_str(object: &MalObject) -> String {
         MalObject::Symbol(name) => name.clone(),
         MalObject::Nil => String::from("nil"),
         MalObject::String(payload) => print_as_string(payload),
-        lhs => unimplemented!("{:?}", lhs),
+        MalObject::Keyword(payload) => print_as_keyword(payload),
+        MalObject::Bool(payload) => String::from(if *payload { "true" } else { "false" }),
     }
 }
 
