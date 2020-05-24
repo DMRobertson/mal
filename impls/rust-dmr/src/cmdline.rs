@@ -1,3 +1,4 @@
+use ansi_term::Style;
 use linefeed::{DefaultTerminal, Interface, ReadResult, Terminal};
 use std::path::PathBuf;
 
@@ -27,19 +28,45 @@ pub fn save_history<T: Terminal>(interface: &Interface<T>) -> std::io::Result<()
     }
 }
 
+lazy_static! {
+    static ref ERROR: Style = Style::new();
+    static ref WARN: Style = Style::new();
+}
+
+struct Styles {
+    error: Style,
+    warn: Style,
+}
+
+fn setup_colors() -> Styles {
+    if atty::is(atty::Stream::Stdout) {
+        Styles {
+            error: Style::new().fg(ansi_term::Color::Red).bold(),
+            warn: Style::new().fg(ansi_term::Color::Yellow),
+        }
+    } else {
+        Styles {
+            error: Style::new(),
+            warn: Style::new(),
+        }
+    }
+}
+
 pub fn repl<T: Terminal>(interface: &Interface<T>, processor: fn(&str) -> Result<String, String>) {
+    let styles = setup_colors();
     loop {
         match interface.read_line() {
             Ok(ReadResult::Eof) => break,
             Ok(ReadResult::Signal(sig)) => {
-                writeln!(interface, "Received signal {:?}", sig).ok();
+                let msg = format!("Received signal {:?}", sig);
+                writeln!(interface, "{}", styles.warn.paint(msg)).ok();
             }
             Ok(ReadResult::Input(line)) if line.len() == 0 => continue,
             Ok(ReadResult::Input(line)) => {
                 interface.add_history_unique(line.clone());
                 match processor(&line) {
                     Ok(s) => writeln!(interface, "{}", s).ok(),
-                    Err(e) => writeln!(interface, "{}", e).ok(),
+                    Err(e) => writeln!(interface, "{}", styles.error.paint(e)).ok(),
                 };
             }
             Err(e) => {
