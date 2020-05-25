@@ -1,5 +1,5 @@
 use crate::environment::Environment;
-use crate::types::{MalList, MalObject, MalSymbol, MalVector};
+use crate::types::{MalList, MalMap, MalObject, MalSymbol, MalVector};
 use std::fmt;
 
 pub type Result = std::result::Result<MalObject, Error>;
@@ -45,6 +45,7 @@ fn evaluate_ast(ast: &MalObject, env: &mut Environment) -> Result {
         MalObject::Symbol(s) => fetch_symbol(s, env),
         MalObject::List(list) => evaluate_list_elements(list, env),
         MalObject::Vector(vec) => evaluate_vector_elements(vec, env),
+        MalObject::Map(map) => evaluate_map(map, env),
         _ => Ok(ast.clone()),
     }
 }
@@ -57,6 +58,16 @@ fn evaluate_list_elements(list: &MalList, env: &mut Environment) -> Result {
 
 fn evaluate_vector_elements(vec: &MalVector, env: &mut Environment) -> Result {
     evaluate_sequence_elementwise(vec, env).map(MalObject::Vector)
+}
+
+fn evaluate_map(map: &MalMap, env: &mut Environment) -> Result {
+    let mut evaluated = MalMap::new();
+    for key in map.keys() {
+        let old_value = map.get(key).unwrap();
+        let new_value = eval(old_value, env)?;
+        evaluated.insert(key.clone(), new_value);
+    }
+    Ok(MalObject::Map(evaluated))
 }
 
 fn evaluate_sequence_elementwise(
