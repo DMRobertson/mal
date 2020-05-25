@@ -1,2 +1,2 @@
 #!/bin/bash
-cargo run --release --bin ${STEP:-stepA_mal} "${@}"
+cargo run --quiet --release --bin ${STEP:-stepA_mal} "${@}" 2>/dev/null
