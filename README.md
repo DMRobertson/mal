@@ -1,3 +1,7 @@
+This is a form of [kanaka/mal](https://github.com/kanaka/mal) for me to toy around with Rust. That repository already has a rust implementation, but I'm not consulting it as I stumble around making my own. Can't promise that I'm fully being idomatic or fully grok lisp itself. Let's see how it goes.
+
+----
+
 # mal - Make a Lisp
 
 [![Build Status](https://travis-ci.org/kanaka/mal.svg?branch=master)](https://travis-ci.org/kanaka/mal)
