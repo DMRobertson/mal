@@ -1,13 +1,13 @@
 use crate::tokens;
 use crate::tokens::{tokenize, Close, Token, TokenizerError};
-use crate::types::{build_map, MalList, MalObject, MapError};
+use crate::types::{build_map, MalList, MalObject, MalSymbol, MapError};
 use std::iter::Peekable;
 use std::{fmt, slice};
 
 type Reader<'a> = Peekable<slice::Iter<'a, Token<'a>>>;
 
 #[derive(Debug)]
-pub enum ReadError {
+pub enum Error {
     TokenizerError(TokenizerError),
     NoMoreTokens,
     UnbalancedSequence,
@@ -18,9 +18,9 @@ pub enum ReadError {
     ReadMapError(MapError),
 }
 
-impl fmt::Display for ReadError {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use ReadError::*;
+        use Error::*;
         write!(f, "Read error: ")?;
         match self {
             TokenizerError(e) => write!(f, "{}", e),
@@ -38,10 +38,10 @@ impl fmt::Display for ReadError {
     }
 }
 
-pub type Result = std::result::Result<MalObject, ReadError>;
+pub type Result = std::result::Result<MalObject, Error>;
 
 pub fn read_str(input: &str) -> Result {
-    let tokens = tokenize(input).map_err(|e| ReadError::TokenizerError(e))?;
+    let tokens = tokenize(input).map_err(|e| Error::TokenizerError(e))?;
     log::debug!("tokenize produced {:?}", tokens);
     let mut reader = tokens.iter().peekable();
     read_form(&mut reader)
@@ -51,16 +51,16 @@ fn read_form(reader: &mut Reader) -> Result {
     use crate::tokens::Open::*;
     use crate::tokens::UnaryOp::*;
 
-    let token = reader.next().ok_or(ReadError::NoMoreTokens)?;
+    let token = reader.next().ok_or(Error::NoMoreTokens)?;
     log::debug!("read_form, token={:?}", token);
     match token {
         Token::Open(List) => read_list(reader),
         Token::Open(Vector) => read_vector(reader),
         Token::Open(Map) => read_map(reader),
-        Token::Close(kind) => Err(ReadError::UnexpectedCloseToken(*kind)),
+        Token::Close(kind) => Err(Error::UnexpectedCloseToken(*kind)),
         Token::PlainChars(_) => read_atom(token),
         Token::StringLiteral(s) => Ok(build_string(s)),
-        Token::Comment(_) => Err(ReadError::ReadComment),
+        Token::Comment(_) => Err(Error::ReadComment),
         Token::UnaryOp(Quote) => read_unary_operand(reader, "quote"),
         Token::UnaryOp(Quasiquote) => read_unary_operand(reader, "quasiquote"),
         Token::UnaryOp(Unquote) => read_unary_operand(reader, "unquote"),
@@ -82,13 +82,13 @@ fn read_map(reader: &mut Reader) -> Result {
     let entries = read_sequence(reader, Close::Map)?;
     build_map(entries)
         .map(MalObject::Map)
-        .map_err(ReadError::ReadMapError)
+        .map_err(Error::ReadMapError)
 }
 
 fn read_sequence(
     reader: &mut Reader,
     closing_token: Close,
-) -> std::result::Result<Vec<MalObject>, ReadError> {
+) -> std::result::Result<Vec<MalObject>, Error> {
     log::debug!("read_sequence, looking for {:?}", closing_token);
     let mut elements = Vec::<MalObject>::new();
     // opening token already consumed
@@ -100,7 +100,7 @@ fn read_sequence(
                 break;
             }
             Some(_token) => elements.push(read_form(reader)?),
-            None => Err(ReadError::UnbalancedSequence)?,
+            None => Err(Error::UnbalancedSequence)?,
         }
     }
     Ok(elements)
@@ -137,12 +137,12 @@ fn ascii_digit(c: char) -> bool {
 
 fn read_int(chars: &str) -> Result {
     i64::from_str_radix(chars, 10)
-        .or(Err(ReadError::ReadIntError))
+        .or(Err(Error::ReadIntError))
         .map(MalObject::Integer)
 }
 
 fn build_symbol(chars: &str) -> MalObject {
-    MalObject::Symbol(String::from(chars))
+    MalObject::Symbol(MalSymbol::from(chars))
 }
 
 fn build_string(chars: &str) -> MalObject {

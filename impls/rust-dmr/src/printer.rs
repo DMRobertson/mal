@@ -1,5 +1,5 @@
-use crate::reader;
 use crate::types::{HashKey, MalMap, MalObject};
+use crate::{interpreter, reader};
 use itertools::Itertools;
 
 pub enum Outcome {
@@ -8,12 +8,15 @@ pub enum Outcome {
 }
 pub type Result = std::result::Result<Outcome, String>;
 
-pub fn print(result: &reader::Result) -> Result {
+pub fn print(result: &interpreter::Result) -> Result {
+    use interpreter::Error::*;
+    use reader::Error::*;
     log::debug!("print {:?}", result);
     match result {
         Ok(obj) => Ok(Outcome::String(pr_str(&obj))),
-        Err(reader::ReadError::ReadComment) => Ok(Outcome::Empty),
-        Err(e) => Err(format!("{}", e)),
+        Err(Read(ReadComment)) => Ok(Outcome::Empty),
+        Err(Read(e)) => Err(format!("{}", e)),
+        Err(Eval(e)) => Err(format!("{}", e)),
     }
 }
 
@@ -26,11 +29,12 @@ fn pr_str(object: &MalObject) -> String {
         MalObject::Vector(elements) => format!("[{}]", elements.iter().map(pr_str).join(" ")),
         MalObject::Map(map) => format!("{{{}}}", print_map_contents(map)),
         MalObject::Integer(value) => value.to_string(),
-        MalObject::Symbol(name) => name.clone(),
+        MalObject::Symbol(s) => s.name.clone(),
         MalObject::Nil => String::from("nil"),
         MalObject::String(payload) => print_as_string(payload),
         MalObject::Keyword(payload) => print_as_keyword(payload),
         MalObject::Bool(payload) => String::from(if *payload { "true" } else { "false" }),
+        MalObject::PrimitiveBinaryOp(_) => "PRIMITIVE_BINARY_OP".to_string(),
     }
 }
 

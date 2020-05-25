@@ -3,21 +3,41 @@ use std::collections::HashMap;
 pub type MalList = Vec<MalObject>;
 pub type MalVector = Vec<MalObject>;
 pub type MalMap = HashMap<HashKey, MalObject>;
+pub type MalInt = i64;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct MalSymbol {
+    pub name: String,
+}
+
+impl<T> From<T> for MalSymbol
+where
+    String: From<T>,
+{
+    fn from(item: T) -> Self {
+        Self {
+            name: String::from(item),
+        }
+    }
+}
+
+pub type PrimitiveBinaryOp = fn(MalInt, MalInt) -> MalInt;
+
+#[derive(Debug, Clone)]
 pub enum MalObject {
     List(MalList),
     Vector(MalVector),
     Map(MalMap),
-    Integer(i64),
-    Symbol(String),
+    Integer(MalInt),
+    Symbol(MalSymbol),
     String(String),
     Keyword(String),
     Bool(bool),
     Nil,
+    PrimitiveBinaryOp(PrimitiveBinaryOp),
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 // TODO Copying the string here. Is there a better way?
 pub enum HashKey {
     String(String),

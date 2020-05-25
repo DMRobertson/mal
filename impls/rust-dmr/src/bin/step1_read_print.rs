@@ -1,4 +1,4 @@
-use rust_dmr_mal::{cmdline, printer, reader};
+use rust_dmr_mal::{cmdline, interpreter, printer, reader};
 
 fn read(line: &str) -> reader::Result {
     reader::read_str(line)
@@ -9,7 +9,8 @@ fn eval(result: reader::Result) -> reader::Result {
 }
 
 fn rep(line: &str) -> printer::Result {
-    printer::print(&eval(read(&line)))
+    let result = eval(read(&line));
+    printer::print(&result.map_err(interpreter::Error::Read))
 }
 
 fn main() -> std::io::Result<()> {

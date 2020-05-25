@@ -53,7 +53,11 @@ fn setup_colors() -> Styles {
     }
 }
 
-pub fn repl<T: Terminal>(interface: &Interface<T>, processor: fn(&str) -> printer::Result) {
+pub fn repl<T, F>(interface: &Interface<T>, mut processor: F)
+where
+    T: Terminal,
+    F: FnMut(&str) -> printer::Result,
+{
     use printer::Outcome;
     let styles = setup_colors();
     loop {

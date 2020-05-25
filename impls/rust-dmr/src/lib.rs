@@ -1,9 +1,12 @@
-pub mod cmdline;
-pub mod printer;
-pub mod reader;
-
 #[macro_use]
 extern crate lazy_static;
+
+pub mod cmdline;
+pub mod environment;
+pub mod evaluator;
+pub mod interpreter;
+pub mod printer;
+pub mod reader;
 
 mod tokens;
 mod types;
