@@ -1,4 +1,4 @@
-use rust_dmr_mal::cmdline;
+use rust_dmr_mal::{cmdline, printer};
 
 fn read(line: &str) -> &str {
     line
@@ -8,12 +8,12 @@ fn eval(line: &str) -> &str {
     line
 }
 
-fn print(line: &str) -> String {
-    String::from(line)
+fn print(line: &str) -> printer::Result {
+    Ok(printer::Outcome::String(line.to_string()))
 }
 
-fn rep(line: &str) -> Result<String, String> {
-    Ok(print(eval(read(&line))))
+fn rep(line: &str) -> printer::Result {
+    print(eval(read(&line)))
 }
 
 fn main() -> std::io::Result<()> {

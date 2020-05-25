@@ -1,3 +1,4 @@
+use crate::printer;
 use ansi_term::Style;
 use linefeed::{DefaultTerminal, Interface, ReadResult, Terminal};
 use std::path::PathBuf;
@@ -52,7 +53,8 @@ fn setup_colors() -> Styles {
     }
 }
 
-pub fn repl<T: Terminal>(interface: &Interface<T>, processor: fn(&str) -> Result<String, String>) {
+pub fn repl<T: Terminal>(interface: &Interface<T>, processor: fn(&str) -> printer::Result) {
+    use printer::Outcome;
     let styles = setup_colors();
     loop {
         match interface.read_line() {
@@ -61,11 +63,14 @@ pub fn repl<T: Terminal>(interface: &Interface<T>, processor: fn(&str) -> Result
                 let msg = format!("Received signal {:?}", sig);
                 writeln!(interface, "{}", styles.warn.paint(msg)).ok();
             }
-            Ok(ReadResult::Input(line)) if line.len() == 0 => continue,
             Ok(ReadResult::Input(line)) => {
+                if line.trim().is_empty() {
+                    continue;
+                }
                 interface.add_history_unique(line.clone());
                 match processor(&line) {
-                    Ok(s) => writeln!(interface, "{}", s).ok(),
+                    Ok(Outcome::String(s)) => writeln!(interface, "{}", s).ok(),
+                    Ok(Outcome::Empty) => continue,
                     Err(e) => writeln!(interface, "{}", styles.error.paint(e)).ok(),
                 };
             }

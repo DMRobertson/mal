@@ -1,8 +1,24 @@
+use crate::reader;
 use crate::types::{HashKey, MalMap, MalObject};
 use itertools::Itertools;
 
+pub enum Outcome {
+    String(String),
+    Empty,
+}
+pub type Result = std::result::Result<Outcome, String>;
+
+pub fn print(result: &reader::Result) -> Result {
+    log::debug!("print {:?}", result);
+    match result {
+        Ok(obj) => Ok(Outcome::String(pr_str(&obj))),
+        Err(reader::ReadError::ReadComment) => Ok(Outcome::Empty),
+        Err(e) => Err(format!("{}", e)),
+    }
+}
+
 // More idiomatic to impl Display for MalObject?
-pub fn pr_str(object: &MalObject) -> String {
+fn pr_str(object: &MalObject) -> String {
     // TODO should this really produce owned Strings? Allocations galore?
     // Meh. Toy project. Make it work first and learn from it.
     match object {
