@@ -1,5 +1,5 @@
 use crate::environment::Environment;
-use crate::types::{MalList, MalObject, MalSymbol};
+use crate::types::{MalList, MalObject, MalSymbol, MalVector};
 use std::fmt;
 
 pub type Result = std::result::Result<MalObject, Error>;
@@ -44,15 +44,28 @@ fn evaluate_ast(ast: &MalObject, env: &mut Environment) -> Result {
     match ast {
         MalObject::Symbol(s) => fetch_symbol(s, env),
         MalObject::List(list) => evaluate_list_elements(list, env),
+        MalObject::Vector(vec) => evaluate_vector_elements(vec, env),
         _ => Ok(ast.clone()),
     }
 }
 
+// TODO make one generic fn tkaing MalObject::List or MalObject::Vector as a parameter?
+// Are rust's enum discriminants things you can be generic over?
 fn evaluate_list_elements(list: &MalList, env: &mut Environment) -> Result {
+    evaluate_sequence_elementwise(list, env).map(MalObject::List)
+}
+
+fn evaluate_vector_elements(vec: &MalVector, env: &mut Environment) -> Result {
+    evaluate_sequence_elementwise(vec, env).map(MalObject::Vector)
+}
+
+fn evaluate_sequence_elementwise(
+    seq: &Vec<MalObject>,
+    env: &mut Environment,
+) -> std::result::Result<Vec<MalObject>, Error> {
     let eval = |obj: &MalObject| eval(obj, env);
-    let mapped: std::result::Result<Vec<MalObject>, Error> = list.iter().map(eval).collect();
-    let objects = mapped?;
-    Ok(MalObject::List(objects))
+    let mapped: std::result::Result<Vec<MalObject>, Error> = seq.iter().map(eval).collect();
+    mapped
 }
 
 fn fetch_symbol(s: &MalSymbol, env: &Environment) -> Result {
