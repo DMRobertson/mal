@@ -1,5 +1,6 @@
 use crate::strings;
 use crate::strings::BuildError;
+use crate::tokens::StringLiteral;
 use std::collections::HashMap;
 
 pub type MalList = Vec<MalObject>;
@@ -80,6 +81,6 @@ pub(crate) fn build_keyword(chars: &str) -> MalObject {
     MalObject::Keyword(String::from(chars))
 }
 
-pub(crate) fn build_string(src: &str) -> Result<MalObject, BuildError> {
-    strings::build_string(src).map(MalObject::String)
+pub(crate) fn build_string(src: &StringLiteral) -> Result<MalObject, BuildError> {
+    strings::build_string(src.payload).map(MalObject::String)
 }

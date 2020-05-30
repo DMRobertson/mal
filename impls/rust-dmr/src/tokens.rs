@@ -1,4 +1,3 @@
-use crate::strings::print_string_repr;
 use regex::Regex;
 use std::fmt;
 
@@ -26,11 +25,15 @@ pub enum UnaryOp {
     SpliceUnquote,
 }
 
+pub struct StringLiteral<'a> {
+    pub payload: &'a str,
+}
+
 pub enum Token<'a> {
     Open(Open),
     Close(Close),
     UnaryOp(UnaryOp),
-    StringLiteral(&'a str),
+    StringLiteral(StringLiteral<'a>),
     Comment(&'a str),
     PlainChars(&'a str),
 }
@@ -38,8 +41,12 @@ pub enum Token<'a> {
 impl<'a> fmt::Debug for Token<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Token::StringLiteral(s) => write!(f, "StringLiteral({})", print_string_repr(s)),
-            _ => write!(f, "{:?}", self),
+            Token::StringLiteral(s) => write!(f, "StringLiteral(\"{}\")", s.payload),
+            Token::Open(t) => write!(f, "Open({:?})", t),
+            Token::Close(t) => write!(f, "Close({:?})", t),
+            Token::UnaryOp(t) => write!(f, "UnaryOp({:?})", t),
+            Token::Comment(t) => write!(f, "Comment({:?})", t),
+            Token::PlainChars(t) => write!(f, "PlainChars({:?})", t),
         }
     }
 }
@@ -114,9 +121,9 @@ fn tokenize_string_literal(bytes: &[u8]) -> Result<Token, TokenizerError> {
         return Err(TokenizerError::UnbalancedString);
     }
 
-    Ok(Token::StringLiteral(
-        std::str::from_utf8(&bytes[1..bytes.len() - 1]).unwrap(),
-    ))
+    Ok(Token::StringLiteral(StringLiteral {
+        payload: std::str::from_utf8(&bytes[1..bytes.len() - 1]).unwrap(),
+    }))
 }
 
 pub fn tokenize(input: &str) -> Result<Vec<Token>, TokenizerError> {

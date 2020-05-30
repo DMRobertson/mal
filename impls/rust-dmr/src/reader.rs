@@ -114,7 +114,7 @@ fn read_sequence(
 fn read_atom(token: &Token) -> Result {
     match token {
         Token::PlainChars(chars) => read_plain_chars(chars),
-        Token::StringLiteral(chars) => build_string(chars).map_err(Error::StringError),
+        Token::StringLiteral(s) => build_string(s).map_err(Error::StringError),
         token => unimplemented!("read_atom token {:?}", token),
     }
 }
