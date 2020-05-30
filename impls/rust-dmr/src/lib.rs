@@ -8,6 +8,7 @@ pub mod interpreter;
 pub mod printer;
 pub mod reader;
 
+mod strings;
 mod tokens;
 mod types;
 

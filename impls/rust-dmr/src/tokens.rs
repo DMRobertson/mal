@@ -1,3 +1,4 @@
+use crate::strings::print_string_repr;
 use regex::Regex;
 use std::fmt;
 
@@ -25,7 +26,6 @@ pub enum UnaryOp {
     SpliceUnquote,
 }
 
-#[derive(Debug)]
 pub enum Token<'a> {
     Open(Open),
     Close(Close),
@@ -33,6 +33,15 @@ pub enum Token<'a> {
     StringLiteral(&'a str),
     Comment(&'a str),
     PlainChars(&'a str),
+}
+
+impl<'a> fmt::Debug for Token<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Token::StringLiteral(s) => write!(f, "StringLiteral({})", print_string_repr(s)),
+            _ => write!(f, "{:?}", self),
+        }
+    }
 }
 
 #[derive(Debug)]

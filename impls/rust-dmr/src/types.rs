@@ -1,3 +1,5 @@
+use crate::strings;
+use crate::strings::BuildError;
 use std::collections::HashMap;
 
 pub type MalList = Vec<MalObject>;
@@ -50,7 +52,7 @@ pub enum MapError {
     UnhashableKey, // TODO include the key that wasn't hashable, or at least its position
 }
 
-pub(crate) fn build_map(entries: MalVector) -> Result<MalMap, MapError> {
+pub(crate) fn build_map(entries: MalVector) -> Result<MalObject, MapError> {
     if entries.len() % 2 == 1 {
         return Err(MapError::MissingValue);
     }
@@ -67,5 +69,17 @@ pub(crate) fn build_map(entries: MalVector) -> Result<MalMap, MapError> {
         map.insert(key, value);
         // TODO detect duplicate keys?
     }
-    Ok(map)
+    Ok(MalObject::Map(map))
+}
+
+pub(crate) fn build_symbol(chars: &str) -> MalObject {
+    MalObject::Symbol(MalSymbol::from(chars))
+}
+
+pub(crate) fn build_keyword(chars: &str) -> MalObject {
+    MalObject::Keyword(String::from(chars))
+}
+
+pub(crate) fn build_string(src: &str) -> Result<MalObject, BuildError> {
+    strings::build_string(src).map(MalObject::String)
 }

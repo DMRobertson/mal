@@ -1,6 +1,9 @@
+use crate::strings::BuildError;
 use crate::tokens;
 use crate::tokens::{tokenize, Close, Token, TokenizerError};
-use crate::types::{build_map, MalList, MalObject, MalSymbol, MapError};
+use crate::types::{
+    build_keyword, build_map, build_string, build_symbol, MalList, MalObject, MapError,
+};
 use std::iter::Peekable;
 use std::{fmt, slice};
 
@@ -16,6 +19,7 @@ pub enum Error {
     UnexpectedCloseToken(tokens::Close),
     Unimplemented,
     ReadMapError(MapError),
+    StringError(BuildError),
 }
 
 impl fmt::Display for Error {
@@ -33,6 +37,7 @@ impl fmt::Display for Error {
             ReadComment => write!(f, "read a comment instead of object"),
             UnexpectedCloseToken(c) => write!(f, "unexpected Close::{:?} token while parsing", c),
             ReadMapError(e) => write!(f, "{:?}", e),
+            StringError(e) => write!(f, "error building string: {:?}", e),
             Unimplemented => write!(f, "haven't implemented this yet, but no need to panic!()"),
         }
     }
@@ -44,7 +49,9 @@ pub fn read_str(input: &str) -> Result {
     let tokens = tokenize(input).map_err(|e| Error::TokenizerError(e))?;
     log::debug!("tokenize produced {:?}", tokens);
     let mut reader = tokens.iter().peekable();
-    read_form(&mut reader)
+    let result = read_form(&mut reader);
+    log::debug!("read_form produced {:?}", result);
+    result
 }
 
 fn read_form(reader: &mut Reader) -> Result {
@@ -59,7 +66,7 @@ fn read_form(reader: &mut Reader) -> Result {
         Token::Open(Map) => read_map(reader),
         Token::Close(kind) => Err(Error::UnexpectedCloseToken(*kind)),
         Token::PlainChars(_) => read_atom(token),
-        Token::StringLiteral(s) => Ok(build_string(s)),
+        Token::StringLiteral(s) => build_string(s).map_err(Error::StringError),
         Token::Comment(_) => Err(Error::ReadComment),
         Token::UnaryOp(Quote) => read_unary_operand(reader, "quote"),
         Token::UnaryOp(Quasiquote) => read_unary_operand(reader, "quasiquote"),
@@ -80,9 +87,7 @@ fn read_vector(reader: &mut Reader) -> Result {
 
 fn read_map(reader: &mut Reader) -> Result {
     let entries = read_sequence(reader, Close::Map)?;
-    build_map(entries)
-        .map(MalObject::Map)
-        .map_err(Error::ReadMapError)
+    build_map(entries).map_err(Error::ReadMapError)
 }
 
 fn read_sequence(
@@ -109,7 +114,7 @@ fn read_sequence(
 fn read_atom(token: &Token) -> Result {
     match token {
         Token::PlainChars(chars) => read_plain_chars(chars),
-        Token::StringLiteral(chars) => Ok(build_string(chars)),
+        Token::StringLiteral(chars) => build_string(chars).map_err(Error::StringError),
         token => unimplemented!("read_atom token {:?}", token),
     }
 }
@@ -139,18 +144,6 @@ fn read_int(chars: &str) -> Result {
     i64::from_str_radix(chars, 10)
         .or(Err(Error::ReadIntError))
         .map(MalObject::Integer)
-}
-
-fn build_symbol(chars: &str) -> MalObject {
-    MalObject::Symbol(MalSymbol::from(chars))
-}
-
-fn build_string(chars: &str) -> MalObject {
-    MalObject::String(String::from(chars))
-}
-
-fn build_keyword(chars: &str) -> MalObject {
-    MalObject::Keyword(String::from(chars))
 }
 
 fn read_unary_operand(reader: &mut Reader, opname: &str) -> Result {

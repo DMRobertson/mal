@@ -4,5 +4,5 @@ target/debug/%: $(SOURCES)
 	cargo build --bin $(*F)
 
 target/release/%: $(SOURCES)
-	cargo build --release --bin $(*F)
+	cargo build --quiet --release --bin $(*F)
 
