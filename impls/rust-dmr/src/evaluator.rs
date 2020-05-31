@@ -87,7 +87,7 @@ fn apply_def(
 #[derive(Debug)]
 pub enum LetError {
     WrongArgCount(usize),
-    BindingsNotList,
+    BindingsNotSequence,
     BindingsOddLength,
     ValueEvaluationFailed,
     BindToNonSymbol,
@@ -97,15 +97,17 @@ fn apply_let(
     args: &[MalObject],
     env: &mut EnvironmentStack,
 ) -> std::result::Result<MalObject, LetError> {
-    use MalObject::List;
+    use MalObject::{List, Vector};
     let (bindings, obj) = match args.len() {
         2 => Ok((&args[0], &args[1])),
         n => Err(LetError::WrongArgCount(n)),
     }?;
     match bindings {
-        List(bindings) if bindings.len() % 2 == 0 => apply_let_evaluate(bindings, obj, env),
-        List(_) => Err(LetError::BindingsOddLength),
-        _ => Err(LetError::BindingsNotList),
+        List(bindings) | Vector(bindings) if bindings.len() % 2 == 0 => {
+            apply_let_evaluate(bindings, obj, env)
+        }
+        List(_) | Vector(_) => Err(LetError::BindingsOddLength),
+        _ => Err(LetError::BindingsNotSequence),
     }
 }
 
