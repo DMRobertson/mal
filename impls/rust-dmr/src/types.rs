@@ -1,6 +1,7 @@
 use crate::strings;
 use crate::strings::BuildError;
 use crate::tokens::StringLiteral;
+use itertools::Itertools;
 use std::collections::HashMap;
 
 pub type MalList = Vec<MalObject>;
@@ -56,10 +57,7 @@ pub(crate) fn build_map(entries: MalVector) -> Result<MalObject, MapError> {
         return Err(MapError::MissingValue);
     }
     let mut map = MalMap::new();
-    let mut entries = entries.into_iter();
-    while entries.len() > 0 {
-        let key = entries.next().unwrap();
-        let value = entries.next().unwrap();
+    for (key, value) in entries.into_iter().tuples() {
         let key = match key {
             MalObject::String(s) => Ok(HashKey::String(s)),
             MalObject::Keyword(s) => Ok(HashKey::Keyword(s)),
