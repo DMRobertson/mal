@@ -2,7 +2,7 @@ use crate::environment::EnvironmentStack;
 use crate::types::{MalList, MalMap, MalObject, MalSymbol, MalVector};
 use std::fmt;
 
-pub type Result = std::result::Result<MalObject, Error>;
+pub type Result<T = MalObject> = std::result::Result<T, Error>;
 #[derive(Debug)]
 pub enum Error {
     UnknownSymbol,
@@ -41,8 +41,9 @@ fn apply(argv: &MalList) -> Result {
 }
 
 fn evaluate_ast(ast: &MalObject, env: &mut EnvironmentStack) -> Result {
+    log::debug!("eval_ast {:?}", ast);
     match ast {
-        MalObject::Symbol(s) => fetch_symbol(s, env),
+        MalObject::Symbol(s) => fetch_symbol(s, env).map(|obj| obj.clone()),
         MalObject::List(list) => evaluate_list_elements(list, env),
         MalObject::Vector(vec) => evaluate_vector_elements(vec, env),
         MalObject::Map(map) => evaluate_map(map, env),
@@ -79,8 +80,6 @@ fn evaluate_sequence_elementwise(
     mapped
 }
 
-fn fetch_symbol(s: &MalSymbol, env: &EnvironmentStack) -> Result {
-    env.get(s)
-        .map(|f| MalObject::PrimitiveBinaryOp(*f))
-        .ok_or(Error::UnknownSymbol)
+fn fetch_symbol<'a>(s: &MalSymbol, env: &'a EnvironmentStack) -> Result<&'a MalObject> {
+    env.get(s).ok_or(Error::UnknownSymbol)
 }

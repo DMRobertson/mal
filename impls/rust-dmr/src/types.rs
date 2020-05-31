@@ -15,12 +15,10 @@ pub struct MalSymbol {
 
 impl<T> From<T> for MalSymbol
 where
-    String: From<T>,
+    T: Into<String>,
 {
     fn from(item: T) -> Self {
-        Self {
-            name: String::from(item),
-        }
+        Self { name: item.into() }
     }
 }
 
