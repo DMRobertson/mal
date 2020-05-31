@@ -1,0 +1,24 @@
+#! /bin/bash
+
+ABS_PWD=$(readlink -e "$(pwd)")
+FG_BOLD_BRIGHT_RED="\e[1;91m"
+FG_BOLD_BRIGHT_GREEN="\e[1;92m"
+FG_RESET="\e[0;39m"
+
+function test {
+	pushd "$ABS_PWD/../../" || return 1
+	make "test^rust-dmr^step$1" || { echo "${FG_BOLD_BRIGHT_RED}step $1 failed${RESET}"; return 1; }
+}
+
+if [ "$#" -eq 0 ] ; then
+	TOTAL_STEPS=$(ls -1 "src/bin" | wc -l)
+	for ((i=0; i<TOTAL_STEPS; i++)) ; do
+		test "$i" || exit 1
+	done
+	echo -e "${FG_BOLD_BRIGHT_GREEN}NOICE${FG_RESET}"
+elif [ "$#" -eq 1 ] ; then
+	test "$1" || exit 1
+else
+	echo "Wrong number of arguments (got $#, expected 0 or 1"
+	exit 1
+fi
