@@ -1,5 +1,6 @@
 use crate::environment::EnvironmentStack;
 use crate::types::{MalList, MalMap, MalObject, MalSymbol, MalVector};
+use itertools::Itertools;
 use std::fmt;
 
 pub type Result<T = MalObject> = std::result::Result<T, Error>;
@@ -8,15 +9,7 @@ pub enum Error {
     UnknownSymbol(String),
     ListHeadNotSymbol,
     DefError(DefError),
-}
-
-#[derive(Debug)]
-pub enum DefError {
-    MissingKey,
-    MissingValue,
-    TooManyArgs(usize),
-    KeyNotASymbol,
-    ValueEvaluationFailed,
+    LetError(LetError),
 }
 
 impl fmt::Display for Error {
@@ -28,6 +21,7 @@ impl fmt::Display for Error {
                 write!(f, "cannot apply list whose first entry is not a symbol")
             }
             Error::DefError(e) => write!(f, "def!: {:?}", e),
+            Error::LetError(e) => write!(f, "let*: {:?}", e),
         }
     }
 }
@@ -52,6 +46,7 @@ fn apply(argv: &[MalObject], env: &mut EnvironmentStack) -> Result {
     if let Symbol(MalSymbol { name }) = &argv[0] {
         match name.as_str() {
             "def!" => return apply_def(&argv[1..], env).map_err(Error::DefError),
+            "let*" => return apply_let(&argv[1..], env).map_err(Error::LetError),
             _ => (),
         };
     };
@@ -65,15 +60,20 @@ fn apply(argv: &[MalObject], env: &mut EnvironmentStack) -> Result {
     }
 }
 
+#[derive(Debug)]
+pub enum DefError {
+    WrongArgCount(usize),
+    KeyNotASymbol,
+    ValueEvaluationFailed,
+}
+
 fn apply_def(
     args: &[MalObject],
     env: &mut EnvironmentStack,
 ) -> std::result::Result<MalObject, DefError> {
     let (key, value) = match args.len() {
-        0 => Err(DefError::MissingKey),
-        1 => Err(DefError::MissingValue),
         2 => Ok((&args[0], &args[1])),
-        n => Err(DefError::TooManyArgs(n)),
+        n => Err(DefError::WrongArgCount(n)),
     }?;
     let key = match key {
         MalObject::Symbol(s) => Ok(s),
@@ -82,6 +82,62 @@ fn apply_def(
     let value = eval(value, env).map_err(|_| DefError::ValueEvaluationFailed)?;
     env.set(key.clone(), value.clone());
     Ok(value)
+}
+
+#[derive(Debug)]
+pub enum LetError {
+    WrongArgCount(usize),
+    BindingsNotList,
+    BindingsOddLength,
+    ValueEvaluationFailed,
+    BindToNonSymbol,
+}
+
+fn apply_let(
+    args: &[MalObject],
+    env: &mut EnvironmentStack,
+) -> std::result::Result<MalObject, LetError> {
+    use MalObject::List;
+    let (bindings, obj) = match args.len() {
+        2 => Ok((&args[0], &args[1])),
+        n => Err(LetError::WrongArgCount(n)),
+    }?;
+    match bindings {
+        List(bindings) if bindings.len() % 2 == 0 => apply_let_evaluate(bindings, obj, env),
+        List(_) => Err(LetError::BindingsOddLength),
+        _ => Err(LetError::BindingsNotList),
+    }
+}
+
+fn apply_let_evaluate(
+    bindings: &MalList,
+    obj: &MalObject,
+    env: &mut EnvironmentStack,
+) -> std::result::Result<MalObject, LetError> {
+    env.push();
+
+    let bind = |(key, value): (&MalObject, &MalObject)| -> std::result::Result<(), LetError> {
+        if let MalObject::Symbol(s) = key {
+            eval(value, env)
+                .map_err(|_| LetError::ValueEvaluationFailed)
+                .map(|value| {
+                    env.set(s.clone(), value);
+                })
+        } else {
+            Err(LetError::BindToNonSymbol)
+        }
+    };
+
+    let bind_result = bindings
+        .iter()
+        .tuples()
+        .map(bind)
+        .collect::<std::result::Result<Vec<()>, _>>();
+
+    let let_result =
+        bind_result.and_then(|_| eval(obj, env).map_err(|_| LetError::ValueEvaluationFailed));
+    env.pop();
+    let_result
 }
 
 fn evaluate_ast(ast: &MalObject, env: &mut EnvironmentStack) -> Result {

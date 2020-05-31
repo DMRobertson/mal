@@ -8,8 +8,12 @@ pub struct EnvironmentStack {
 }
 
 impl EnvironmentStack {
-    fn push_env(&mut self) {
+    pub(crate) fn push(&mut self) {
         self.envs.push(Environment::new());
+    }
+
+    pub(crate) fn pop(&mut self) {
+        self.envs.pop();
     }
 
     pub fn set<T>(&mut self, key: T, value: MalObject) -> Option<MalObject>
@@ -33,7 +37,7 @@ impl Default for EnvironmentStack {
     fn default() -> Self {
         use MalObject::PrimitiveBinaryOp;
         let mut stack = Self { envs: Vec::new() };
-        stack.push_env();
+        stack.push();
         stack.set("+", PrimitiveBinaryOp(|x, y| x.wrapping_add(y)));
         stack.set("-", PrimitiveBinaryOp(|x, y| x.wrapping_sub(y)));
         stack.set("*", PrimitiveBinaryOp(|x, y| x.wrapping_mul(y)));
