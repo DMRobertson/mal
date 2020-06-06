@@ -1,4 +1,4 @@
-use crate::{environment, evaluator, reader, MalObject};
+use crate::{evaluator, printer, reader, MalObject};
 
 pub type Result = std::result::Result<MalObject, Error>;
 #[derive(Debug)]
@@ -7,10 +7,12 @@ pub enum Error {
     Eval(evaluator::Error),
 }
 
-pub fn read(line: &str) -> Result {
+#[allow(non_snake_case)]
+pub fn READ(line: &str) -> Result {
     reader::read_str(line).map_err(Error::Read)
 }
 
-pub fn eval(obj: &MalObject, env: &mut environment::EnvironmentStack) -> Result {
-    evaluator::eval(obj, env).map_err(Error::Eval)
+#[allow(non_snake_case)]
+pub fn PRINT(result: &Result) -> printer::Result {
+    printer::print(result)
 }

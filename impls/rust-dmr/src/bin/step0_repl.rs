@@ -1,24 +1,25 @@
-use rust_dmr_mal::{cmdline, printer};
+use rust_dmr_mal::{cmdline, environment, printer};
 
-fn read(line: &str) -> &str {
+#[allow(non_snake_case)]
+fn READ(line: &str) -> &str {
     line
 }
 
-fn eval(line: &str) -> &str {
+#[allow(non_snake_case)]
+fn EVAL(line: &str) -> &str {
     line
 }
 
-fn print(line: &str) -> printer::Result {
+#[allow(non_snake_case)]
+fn PRINT(line: &str) -> printer::Result {
     Ok(printer::Outcome::String(line.to_string()))
 }
 
 fn rep(line: &str) -> printer::Result {
-    print(eval(read(&line)))
+    PRINT(EVAL(READ(&line)))
 }
 
 fn main() -> std::io::Result<()> {
-    let interface = cmdline::setup()?;
-    cmdline::repl(&interface, rep);
-    cmdline::save_history(&interface)?;
-    Ok(())
+    let rep_dummy = |s: &str, _: &mut environment::EnvironmentStack| rep(s);
+    cmdline::run(rep_dummy)
 }

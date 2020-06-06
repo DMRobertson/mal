@@ -1,22 +1,16 @@
-use rust_dmr_mal::{cmdline, interpreter, printer, reader};
+use rust_dmr_mal::interpreter::{PRINT, READ};
+use rust_dmr_mal::{cmdline, environment, interpreter, printer, MalObject};
 
-fn read(line: &str) -> reader::Result {
-    reader::read_str(line)
-}
-
-fn eval(result: reader::Result) -> reader::Result {
-    result.map(|obj| obj)
+#[allow(non_snake_case)]
+fn EVAL(result: MalObject) -> interpreter::Result {
+    Ok(result)
 }
 
 fn rep(line: &str) -> printer::Result {
-    let result = eval(read(&line));
-    printer::print(&result.map_err(interpreter::Error::Read))
+    PRINT(&READ(&line).and_then(EVAL))
 }
 
 fn main() -> std::io::Result<()> {
-    pretty_env_logger::init();
-    let interface = cmdline::setup()?;
-    cmdline::repl(&interface, rep);
-    cmdline::save_history(&interface)?;
-    Ok(())
+    let rep_dummy = |s: &str, _: &mut environment::EnvironmentStack| rep(s);
+    cmdline::run(rep_dummy)
 }

@@ -1,9 +1,22 @@
-use crate::printer;
+use crate::{environment, printer};
 use ansi_term::Style;
 use linefeed::{DefaultTerminal, Interface, ReadResult, Terminal};
 use std::path::PathBuf;
 
-pub fn setup() -> std::io::Result<Interface<DefaultTerminal>> {
+pub fn run<F>(rep: F) -> std::io::Result<()>
+where
+    F: Fn(&str, &mut environment::EnvironmentStack) -> printer::Result,
+{
+    pretty_env_logger::init();
+    let interface = setup()?;
+    let mut envs = environment::EnvironmentStack::default();
+    let processor = |line: &str| rep(line, &mut envs);
+    repl(&interface, processor);
+    save_history(&interface)?;
+    Ok(())
+}
+
+fn setup() -> std::io::Result<Interface<DefaultTerminal>> {
     let interface = linefeed::Interface::new("mal")?;
     interface.set_prompt("user> ")?;
     if let Some(path) = history_path() {
@@ -22,7 +35,7 @@ fn history_path() -> Option<PathBuf> {
     }
 }
 
-pub fn save_history<T: Terminal>(interface: &Interface<T>) -> std::io::Result<()> {
+fn save_history<T: Terminal>(interface: &Interface<T>) -> std::io::Result<()> {
     match history_path() {
         Some(path) => interface.save_history(path),
         None => Ok(()),
@@ -53,7 +66,7 @@ fn setup_colors() -> Styles {
     }
 }
 
-pub fn repl<T, F>(interface: &Interface<T>, mut processor: F)
+fn repl<T, F>(interface: &Interface<T>, mut processor: F)
 where
     T: Terminal,
     F: FnMut(&str) -> printer::Result,
