@@ -1,5 +1,6 @@
-// I think Mal keeps things simple and only defines the escapes \n, \" and \\ in a string literal.
-// Let's implement exactly that rather than inheriting rust's string literal behaviour.
+// I think Mal keeps things simple and only defines the escapes \n, \" and \\ in
+// a string literal. Let's implement exactly that rather than inheriting rust's
+// string literal behaviour.
 
 use bimap::BiMap;
 use std::str::Chars;
@@ -38,7 +39,7 @@ impl Iterator for StringBuilder<'_> {
                 None => Err(BuildError::UnexpectedSingleBackslash),
                 Some(c) => ESCAPES
                     .get_by_left(&c)
-                    .map(|&v| v)
+                    .copied()
                     .ok_or(BuildError::UnknownEscape(c)),
             },
             c => Ok(c),
@@ -87,5 +88,5 @@ pub(crate) fn print_string_repr(src: &str) -> String {
     output
 }
 
-// TODO should make baby tests to ensure that read_str and print_str_repr are mutually inverse
-// but let's just rely on the mal test suite for now
+// TODO should make baby tests to ensure that read_str and print_str_repr are
+// mutually inverse but let's just rely on the mal test suite for now

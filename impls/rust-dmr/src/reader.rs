@@ -46,7 +46,7 @@ impl fmt::Display for Error {
 pub type Result = std::result::Result<MalObject, Error>;
 
 pub fn read_str(input: &str) -> Result {
-    let tokens = tokenize(input).map_err(|e| Error::TokenizerError(e))?;
+    let tokens = tokenize(input).map_err(Error::TokenizerError)?;
     log::debug!("tokenize produced {:?}", tokens);
     let mut reader = tokens.iter().peekable();
     let result = read_form(&mut reader);
@@ -105,7 +105,7 @@ fn read_sequence(
                 break;
             }
             Some(_token) => elements.push(read_form(reader)?),
-            None => Err(Error::UnbalancedSequence)?,
+            None => return Err(Error::UnbalancedSequence),
         }
     }
     Ok(elements)

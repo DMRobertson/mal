@@ -25,7 +25,7 @@ impl EnvironmentStack {
             .iter_mut()
             .last()
             .unwrap_or_else(|| panic!("No environments in stack"));
-        map.insert(key.into().clone(), value)
+        map.insert(key.into(), value)
     }
 
     pub fn get(&self, key: &MalSymbol) -> Option<&MalObject> {

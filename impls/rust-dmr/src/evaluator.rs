@@ -1,5 +1,5 @@
 use crate::environment::EnvironmentStack;
-use crate::types::{MalList, MalMap, MalObject, MalSymbol, MalVector};
+use crate::types::{MalList, MalMap, MalObject, MalSymbol};
 use itertools::Itertools;
 use std::fmt;
 
@@ -112,7 +112,7 @@ fn apply_let(
 }
 
 fn apply_let_evaluate(
-    bindings: &MalList,
+    bindings: &[MalObject],
     obj: &MalObject,
     env: &mut EnvironmentStack,
 ) -> std::result::Result<MalObject, LetError> {
@@ -146,21 +146,11 @@ fn evaluate_ast(ast: &MalObject, env: &mut EnvironmentStack) -> Result {
     log::debug!("eval_ast {:?}", ast);
     match ast {
         MalObject::Symbol(s) => fetch_symbol(s, env).map(|obj| obj.clone()),
-        MalObject::List(list) => evaluate_list_elements(list, env),
-        MalObject::Vector(vec) => evaluate_vector_elements(vec, env),
+        MalObject::List(list) => evaluate_sequence_elementwise(list, env).map(MalObject::List),
+        MalObject::Vector(vec) => evaluate_sequence_elementwise(vec, env).map(MalObject::Vector),
         MalObject::Map(map) => evaluate_map(map, env),
         _ => Ok(ast.clone()),
     }
-}
-
-// TODO make one generic fn tkaing MalObject::List or MalObject::Vector as a parameter?
-// Are rust's enum discriminants things you can be generic over?
-fn evaluate_list_elements(list: &MalList, env: &mut EnvironmentStack) -> Result {
-    evaluate_sequence_elementwise(list, env).map(MalObject::List)
-}
-
-fn evaluate_vector_elements(vec: &MalVector, env: &mut EnvironmentStack) -> Result {
-    evaluate_sequence_elementwise(vec, env).map(MalObject::Vector)
 }
 
 fn evaluate_map(map: &MalMap, env: &mut EnvironmentStack) -> Result {
@@ -183,5 +173,6 @@ fn evaluate_sequence_elementwise(
 }
 
 fn fetch_symbol<'a>(s: &MalSymbol, env: &'a EnvironmentStack) -> Result<&'a MalObject> {
-    env.get(s).ok_or(Error::UnknownSymbol(s.name.clone()))
+    env.get(s)
+        .ok_or_else(|| Error::UnknownSymbol(s.name.clone()))
 }

@@ -149,10 +149,10 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, TokenizerError> {
     }
     let mut input = input;
     let mut tokens = Vec::new();
-    while input.len() > 0 {
+    while !input.is_empty() {
         let caps = TOKEN_RE
             .captures(input)
-            .ok_or(TokenizerError::NoCapture(String::from(input)))?;
+            .ok_or_else(|| TokenizerError::NoCapture(String::from(input)))?;
         let token = create_token(caps.get(1).unwrap().as_str())?;
         tokens.push(token);
         input = &input[caps.get(0).unwrap().end()..];
