@@ -7,7 +7,7 @@ FG_RESET="\e[0;39m"
 
 function test {
 	pushd "$ABS_PWD/../../" || return 1
-	make "test^rust-dmr^step$1" || { echo "${FG_BOLD_BRIGHT_RED}step $1 failed${RESET}"; return 1; }
+	make "test^rust-dmr^step$1" || { echo -e "${FG_BOLD_BRIGHT_RED}step $1 failed${RESET}"; return 1; }
 }
 
 if [ "$#" -eq 0 ] ; then
