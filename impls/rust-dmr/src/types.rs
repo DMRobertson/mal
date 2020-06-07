@@ -1,8 +1,11 @@
-use crate::strings;
 use crate::strings::BuildError;
 use crate::tokens::StringLiteral;
+use crate::{evaluator, strings};
 use itertools::Itertools;
 use std::collections::HashMap;
+use std::convert::TryFrom;
+use std::fmt;
+use std::ops::{RangeFrom, RangeInclusive};
 
 pub type MalList = Vec<MalObject>;
 pub type MalVector = Vec<MalObject>;
@@ -23,6 +26,45 @@ where
     }
 }
 
+#[derive(Debug)]
+pub enum Arity {
+    Bounded(RangeInclusive<usize>),
+    BoundedBelow(RangeFrom<usize>),
+}
+
+impl Arity {
+    pub(crate) const fn exactly(n: usize) -> Self {
+        Self::Bounded(n..=n)
+    }
+}
+
+impl fmt::Display for Arity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Arity::Bounded(r) => {
+                if r.start() == r.end() {
+                    write!(f, "exactly {}", r.start())
+                } else {
+                    write!(f, "from {} to {}", r.start(), r.end())
+                }
+            }
+            Arity::BoundedBelow(r) => write!(f, "At least {}", r.start),
+        }
+    }
+}
+
+pub struct PrimitiveFn {
+    pub name: &'static str,
+    pub arity: Arity,
+    pub fn_ptr: fn(&[MalObject]) -> evaluator::Result,
+}
+
+impl fmt::Debug for PrimitiveFn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "primitive function #<{}>", self.name)
+    }
+}
+
 pub type PrimitiveBinaryOp = fn(MalInt, MalInt) -> MalInt;
 
 #[derive(Debug, Clone)]
@@ -36,7 +78,23 @@ pub enum MalObject {
     Keyword(String),
     Bool(bool),
     Nil,
-    PrimitiveBinaryOp(PrimitiveBinaryOp),
+    Primitive(&'static PrimitiveFn),
+}
+
+#[derive(Debug)]
+pub enum TypeMismatch {
+    NotAnInt,
+}
+
+impl TryFrom<&MalObject> for MalInt {
+    type Error = TypeMismatch;
+
+    fn try_from(value: &MalObject) -> Result<Self, Self::Error> {
+        match value {
+            MalObject::Integer(x) => Ok(*x),
+            _ => Err(TypeMismatch::NotAnInt),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]

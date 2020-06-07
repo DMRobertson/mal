@@ -1,6 +1,6 @@
 use crate::environment::EnvironmentStack;
-use crate::special_forms;
-use crate::types::{MalList, MalMap, MalObject, MalSymbol};
+use crate::types::{MalList, MalMap, MalObject, MalSymbol, PrimitiveFn};
+use crate::{special_forms, types};
 use std::fmt;
 
 pub type Result<T = MalObject> = std::result::Result<T, Error>;
@@ -11,6 +11,9 @@ pub enum Error {
     Def(special_forms::DefError),
     Let(special_forms::LetError),
     Do(special_forms::DoError),
+    TypeMismatch(types::TypeMismatch),
+    BadArgCount(&'static PrimitiveFn, usize),
+    DivideByZero,
 }
 
 pub type Evaluator = fn(&MalObject, &mut Context) -> Result;
@@ -36,9 +39,16 @@ impl fmt::Display for Error {
             Error::ListHeadNotSymbol => {
                 write!(f, "cannot apply list whose first entry is not a symbol")
             }
+            Error::TypeMismatch(e) => write!(f, "type mismatch: {:?}", e),
             Error::Def(e) => write!(f, "def!: {:?}", e),
             Error::Let(e) => write!(f, "let*: {:?}", e),
             Error::Do(e) => write!(f, "do*: {:?}", e),
+            Error::BadArgCount(func, count) => write!(
+                f,
+                "Function {} expected {} arguments, but received {} arguments",
+                func.name, func.arity, count
+            ),
+            Error::DivideByZero => write!(f, "cannot divide by zero!"),
         }
     }
 }
@@ -91,4 +101,19 @@ pub fn evaluate_sequence_elementwise(
 fn fetch_symbol<'a>(s: &MalSymbol, env: &'a EnvironmentStack) -> Result<&'a MalObject> {
     env.get(s)
         .ok_or_else(|| Error::UnknownSymbol(s.name.clone()))
+}
+
+pub fn call_primitive(func: &'static PrimitiveFn, args: &[MalObject]) -> Result {
+    use types::Arity;
+    log::debug!("Call {} with {:?}", func.name, args);
+    let count_correct = match &func.arity {
+        Arity::Bounded(range) => range.contains(&args.len()),
+        Arity::BoundedBelow(range) => range.contains(&args.len()),
+    };
+    if !count_correct {
+        return Err(Error::BadArgCount(func, args.len()));
+    };
+    let result = (func.fn_ptr)(args);
+    log::debug!("Call to {} resulted in {:?}", func.name, result);
+    result
 }

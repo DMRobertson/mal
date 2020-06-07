@@ -1,3 +1,4 @@
+use crate::core;
 use crate::types::{MalObject, MalSymbol};
 use std::collections::HashMap;
 
@@ -35,13 +36,12 @@ impl EnvironmentStack {
 
 impl Default for EnvironmentStack {
     fn default() -> Self {
-        use MalObject::PrimitiveBinaryOp;
         let mut stack = Self { envs: Vec::new() };
         stack.push();
-        stack.set("+", PrimitiveBinaryOp(|x, y| x.wrapping_add(y)));
-        stack.set("-", PrimitiveBinaryOp(|x, y| x.wrapping_sub(y)));
-        stack.set("*", PrimitiveBinaryOp(|x, y| x.wrapping_mul(y)));
-        stack.set("/", PrimitiveBinaryOp(|x, y| x.wrapping_div(y))); // TODO handle div by zero
+        for (&name, &func) in core::CORE.iter() {
+            stack.set(name, MalObject::Primitive(func.clone()));
+        }
+
         stack
     }
 }

@@ -44,7 +44,7 @@ fn pr_str(object: &MalObject, mode: PrintMode) -> String {
         MalObject::String(payload) => print_as_string(payload, mode),
         MalObject::Keyword(payload) => print_as_keyword(payload),
         MalObject::Bool(payload) => String::from(if *payload { "true" } else { "false" }),
-        MalObject::PrimitiveBinaryOp(_) => "PRIMITIVE_BINARY_OP".to_string(),
+        MalObject::Primitive(f) => format!("{:?}", f),
     }
 }
 

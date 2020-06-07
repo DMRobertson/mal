@@ -10,5 +10,6 @@ pub mod reader;
 pub mod special_forms;
 pub mod types;
 
+mod core;
 mod strings;
 mod tokens;

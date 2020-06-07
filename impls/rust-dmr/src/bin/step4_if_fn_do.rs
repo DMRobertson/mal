@@ -16,7 +16,7 @@ fn EVAL(ast: &MalObject, ctx: &mut evaluator::Context) -> evaluator::Result {
 }
 
 fn apply(argv: &[MalObject], ctx: &mut evaluator::Context) -> evaluator::Result {
-    use MalObject::{Integer, PrimitiveBinaryOp, Symbol};
+    use MalObject::{Primitive, Symbol};
     log::debug!("apply {:?}", argv);
     if let Symbol(MalSymbol { name }) = &argv[0] {
         match name.as_str() {
@@ -27,11 +27,9 @@ fn apply(argv: &[MalObject], ctx: &mut evaluator::Context) -> evaluator::Result 
         };
     };
     let evaluated = evaluator::evaluate_sequence_elementwise(argv, ctx)?;
-    match &evaluated[0] {
-        PrimitiveBinaryOp(op) => match evaluated[1..] {
-            [Integer(x), Integer(y)] => Ok(Integer(op(x, y))),
-            _ => panic!("apply: bad PrimitiveBinaryOp"),
-        },
+    let (callable, args) = evaluated.split_first().unwrap();
+    match callable {
+        Primitive(f) => evaluator::call_primitive(f, args),
         _ => panic!("apply: bad MalObject {:?}", evaluated),
     }
 }
