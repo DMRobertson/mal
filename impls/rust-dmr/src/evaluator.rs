@@ -1,6 +1,6 @@
 use crate::environment::EnvironmentStack;
+use crate::special_forms;
 use crate::types::{MalMap, MalObject, MalSymbol};
-use itertools::Itertools;
 use std::fmt;
 
 pub type Result<T = MalObject> = std::result::Result<T, Error>;
@@ -8,8 +8,8 @@ pub type Result<T = MalObject> = std::result::Result<T, Error>;
 pub enum Error {
     UnknownSymbol(String),
     ListHeadNotSymbol,
-    DefError(DefError),
-    LetError(LetError),
+    DefError(special_forms::DefError),
+    LetError(special_forms::LetError),
 }
 
 pub type Evaluator = fn(&MalObject, &mut EnvironmentStack) -> Result;
@@ -22,7 +22,7 @@ pub struct Context<'a> {
 
 impl<'a> Context<'a> {
     #[allow(non_snake_case)]
-    fn EVAL(&mut self, obj: &MalObject) -> Result {
+    pub(crate) fn EVAL(&mut self, obj: &MalObject) -> Result {
         (self.evaluator)(obj, &mut self.env)
     }
 }
@@ -39,104 +39,6 @@ impl fmt::Display for Error {
             Error::LetError(e) => write!(f, "let*: {:?}", e),
         }
     }
-}
-
-fn apply(argv: &[MalObject], ctx: &mut Context) -> Result {
-    use MalObject::{Integer, PrimitiveBinaryOp, Symbol};
-    log::debug!("apply {:?}", argv);
-    if let Symbol(MalSymbol { name }) = &argv[0] {
-        match name.as_str() {
-            "def!" => return apply_def(&argv[1..], ctx).map_err(Error::DefError),
-            "let*" => return apply_let(&argv[1..], ctx).map_err(Error::LetError),
-            _ => (),
-        };
-    };
-    let evaluated = evaluate_sequence_elementwise(argv, ctx)?;
-    match &evaluated[0] {
-        PrimitiveBinaryOp(op) => match evaluated[1..] {
-            [Integer(x), Integer(y)] => Ok(Integer(op(x, y))),
-            _ => panic!("apply: bad PrimitiveBinaryOp"),
-        },
-        _ => panic!("apply: bad MalObject {:?}", evaluated),
-    }
-}
-
-#[derive(Debug)]
-pub enum DefError {
-    WrongArgCount(usize),
-    KeyNotASymbol,
-    ValueEvaluationFailed,
-}
-
-fn apply_def(args: &[MalObject], ctx: &mut Context) -> std::result::Result<MalObject, DefError> {
-    let (key, value) = match args.len() {
-        2 => Ok((&args[0], &args[1])),
-        n => Err(DefError::WrongArgCount(n)),
-    }?;
-    let key = match key {
-        MalObject::Symbol(s) => Ok(s),
-        _ => Err(DefError::KeyNotASymbol),
-    }?;
-    let value = ctx
-        .EVAL(value)
-        .map_err(|_| DefError::ValueEvaluationFailed)?;
-    ctx.env.set(key.clone(), value.clone());
-    Ok(value)
-}
-
-#[derive(Debug)]
-pub enum LetError {
-    WrongArgCount(usize),
-    BindingsNotSequence,
-    BindingsOddLength,
-    ValueEvaluationFailed,
-    BindToNonSymbol,
-}
-
-fn apply_let(args: &[MalObject], ctx: &mut Context) -> std::result::Result<MalObject, LetError> {
-    use MalObject::{List, Vector};
-    let (bindings, obj) = match args.len() {
-        2 => Ok((&args[0], &args[1])),
-        n => Err(LetError::WrongArgCount(n)),
-    }?;
-    match bindings {
-        List(bindings) | Vector(bindings) if bindings.len() % 2 == 0 => {
-            apply_let_evaluate(bindings, obj, ctx)
-        }
-        List(_) | Vector(_) => Err(LetError::BindingsOddLength),
-        _ => Err(LetError::BindingsNotSequence),
-    }
-}
-
-fn apply_let_evaluate(
-    bindings: &[MalObject],
-    obj: &MalObject,
-    ctx: &mut Context,
-) -> std::result::Result<MalObject, LetError> {
-    ctx.env.push();
-
-    let bind = |(key, value): (&MalObject, &MalObject)| -> std::result::Result<(), LetError> {
-        if let MalObject::Symbol(s) = key {
-            ctx.EVAL(value)
-                .map_err(|_| LetError::ValueEvaluationFailed)
-                .map(|value| {
-                    ctx.env.set(s.clone(), value);
-                })
-        } else {
-            Err(LetError::BindToNonSymbol)
-        }
-    };
-
-    let bind_result = bindings
-        .iter()
-        .tuples()
-        .map(bind)
-        .collect::<std::result::Result<Vec<()>, _>>();
-
-    let let_result =
-        bind_result.and_then(|_| ctx.EVAL(obj).map_err(|_| LetError::ValueEvaluationFailed));
-    ctx.env.pop();
-    let_result
 }
 
 pub fn evaluate_ast(ast: &MalObject, ctx: &mut Context) -> Result {

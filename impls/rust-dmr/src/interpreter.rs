@@ -1,4 +1,5 @@
-use crate::{evaluator, printer, reader, MalObject};
+use crate::types::MalObject;
+use crate::{evaluator, printer, reader};
 
 pub type Result = std::result::Result<MalObject, Error>;
 #[derive(Debug)]

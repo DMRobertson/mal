@@ -8,8 +8,7 @@ pub mod interpreter;
 pub mod printer;
 pub mod reader;
 
+pub mod special_forms;
 mod strings;
 mod tokens;
-mod types;
-
-pub use types::{MalList, MalObject};
+pub mod types;

@@ -1,5 +1,6 @@
 use rust_dmr_mal::interpreter::{PRINT, READ};
-use rust_dmr_mal::{cmdline, environment, interpreter, printer, MalObject};
+use rust_dmr_mal::types::MalObject;
+use rust_dmr_mal::{cmdline, environment, interpreter, printer};
 
 #[allow(non_snake_case)]
 fn EVAL(result: MalObject) -> interpreter::Result {

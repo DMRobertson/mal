@@ -1,5 +1,6 @@
 use rust_dmr_mal::interpreter::{PRINT, READ};
-use rust_dmr_mal::{cmdline, environment, evaluator, interpreter, printer, MalList, MalObject};
+use rust_dmr_mal::types::{MalList, MalObject};
+use rust_dmr_mal::{cmdline, environment, evaluator, interpreter, printer};
 
 fn rep(line: &str, env: &mut environment::EnvironmentStack) -> printer::Result {
     PRINT(&READ(line).and_then(|ast| EVAL(&ast, env).map_err(interpreter::Error::Eval)))
@@ -28,7 +29,7 @@ fn EVAL(ast: &MalObject, env: &mut environment::EnvironmentStack) -> evaluator::
 }
 
 fn apply(argv: &[MalObject], ctx: &mut evaluator::Context) -> evaluator::Result {
-    use MalObject::{Integer, PrimitiveBinaryOp, Symbol};
+    use MalObject::{Integer, PrimitiveBinaryOp};
     log::debug!("apply {:?}", argv);
     let evaluated = evaluator::evaluate_sequence_elementwise(argv, ctx)?;
     match &evaluated[0] {
