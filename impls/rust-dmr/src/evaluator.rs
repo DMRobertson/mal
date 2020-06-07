@@ -1,6 +1,6 @@
 use crate::environment::EnvironmentStack;
 use crate::special_forms;
-use crate::types::{MalMap, MalObject, MalSymbol};
+use crate::types::{MalList, MalMap, MalObject, MalSymbol};
 use std::fmt;
 
 pub type Result<T = MalObject> = std::result::Result<T, Error>;
@@ -10,6 +10,7 @@ pub enum Error {
     ListHeadNotSymbol,
     Def(special_forms::DefError),
     Let(special_forms::LetError),
+    Do(special_forms::DoError),
 }
 
 pub type Evaluator = fn(&MalObject, &mut Context) -> Result;
@@ -37,6 +38,7 @@ impl fmt::Display for Error {
             }
             Error::Def(e) => write!(f, "def!: {:?}", e),
             Error::Let(e) => write!(f, "let*: {:?}", e),
+            Error::Do(e) => write!(f, "do*: {:?}", e),
         }
     }
 }

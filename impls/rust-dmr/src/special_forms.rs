@@ -1,30 +1,28 @@
+use crate::evaluator;
 use crate::evaluator::Context;
 use crate::types::MalObject;
 use itertools::Itertools;
+
+use evaluator::Error;
 
 #[derive(Debug)]
 pub enum DefError {
     WrongArgCount(usize),
     KeyNotASymbol,
-    ValueEvaluationFailed,
 }
 
-pub fn apply_def(
-    args: &[MalObject],
-    ctx: &mut Context,
-) -> std::result::Result<MalObject, DefError> {
+pub fn apply_def(args: &[MalObject], ctx: &mut Context) -> evaluator::Result {
     let (key, value) = match args.len() {
         2 => Ok((&args[0], &args[1])),
-        n => Err(DefError::WrongArgCount(n)),
+        n => Err(Error::Def(DefError::WrongArgCount(n))),
     }?;
     let key = match key {
         MalObject::Symbol(s) => Ok(s),
-        _ => Err(DefError::KeyNotASymbol),
+        _ => Err(Error::Def(DefError::KeyNotASymbol)),
     }?;
-    let value = ctx
-        .EVAL(value)
-        .map_err(|_| DefError::ValueEvaluationFailed)?;
+    let value = ctx.EVAL(value)?;
     ctx.env.set(key.clone(), value.clone());
+    // Shouldn't this return a reference to the object in the map?
     Ok(value)
 }
 
@@ -78,4 +76,18 @@ fn apply_let_evaluate(
     let let_result = bind_result.and_then(|_| ctx.EVAL(obj));
     ctx.env.pop();
     let_result
+}
+
+#[derive(Debug)]
+pub enum DoError {
+    NothingToDo,
+}
+
+pub fn apply_do(args: &[MalObject], ctx: &mut Context) -> evaluator::Result {
+    if args.is_empty() {
+        return Err(Error::Do(DoError::NothingToDo));
+    }
+    let result: Result<Vec<MalObject>, _> = args.iter().map(|obj| ctx.EVAL(obj)).collect();
+    // TODO returning a copy here---doesn't feel right
+    Ok(result?.last().unwrap().clone())
 }
