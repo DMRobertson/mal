@@ -10,7 +10,7 @@ use std::ops::{RangeFrom, RangeInclusive};
 pub type MalList = Vec<MalObject>;
 pub type MalVector = Vec<MalObject>;
 pub type MalMap = HashMap<HashKey, MalObject>;
-pub type MalInt = i64;
+pub type MalInt = isize;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct MalSymbol {

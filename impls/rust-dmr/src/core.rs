@@ -3,7 +3,7 @@ use crate::types::{Arity, MalInt, MalObject, PrimitiveFn};
 use std::collections::HashMap;
 use std::convert::TryFrom;
 
-fn grab_ints(args: &[MalObject]) -> evaluator::Result<Vec<i64>> {
+fn grab_ints(args: &[MalObject]) -> evaluator::Result<Vec<MalInt>> {
     let type_check: Result<Vec<_>, _> = args.iter().map(MalInt::try_from).collect();
     type_check.map_err(evaluator::Error::TypeMismatch)
 }

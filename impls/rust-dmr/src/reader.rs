@@ -2,7 +2,7 @@ use crate::strings::BuildError;
 use crate::tokens;
 use crate::tokens::{tokenize, Close, Token, TokenizerError};
 use crate::types::{
-    build_keyword, build_map, build_string, build_symbol, MalList, MalObject, MapError,
+    build_keyword, build_map, build_string, build_symbol, MalInt, MalList, MalObject, MapError,
 };
 use std::iter::Peekable;
 use std::{fmt, slice};
@@ -146,7 +146,7 @@ fn ascii_digit(c: char) -> bool {
 }
 
 fn read_int(chars: &str) -> Result {
-    i64::from_str_radix(chars, 10)
+    MalInt::from_str_radix(chars, 10)
         .or(Err(Error::ReadIntError))
         .map(MalObject::Integer)
 }
