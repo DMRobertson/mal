@@ -20,14 +20,8 @@ fn apply(argv: &[MalObject], ctx: &mut evaluator::Context) -> evaluator::Result 
     log::debug!("apply {:?}", argv);
     if let Symbol(MalSymbol { name }) = &argv[0] {
         match name.as_str() {
-            "def!" => {
-                return special_forms::apply_def(&argv[1..], ctx)
-                    .map_err(evaluator::Error::DefError)
-            }
-            "let*" => {
-                return special_forms::apply_let(&argv[1..], ctx)
-                    .map_err(evaluator::Error::LetError)
-            }
+            "def!" => return special_forms::apply_def(&argv[1..], ctx),
+            "let*" => return special_forms::apply_let(&argv[1..], ctx),
             _ => (),
         };
     };

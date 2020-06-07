@@ -8,8 +8,8 @@ pub type Result<T = MalObject> = std::result::Result<T, Error>;
 pub enum Error {
     UnknownSymbol(String),
     ListHeadNotSymbol,
-    DefError(special_forms::DefError),
-    LetError(special_forms::LetError),
+    Def(special_forms::DefError),
+    Let(special_forms::LetError),
 }
 
 pub type Evaluator = fn(&MalObject, &mut Context) -> Result;
@@ -35,8 +35,8 @@ impl fmt::Display for Error {
             Error::ListHeadNotSymbol => {
                 write!(f, "cannot apply list whose first entry is not a symbol")
             }
-            Error::DefError(e) => write!(f, "def!: {:?}", e),
-            Error::LetError(e) => write!(f, "let*: {:?}", e),
+            Error::Def(e) => write!(f, "def!: {:?}", e),
+            Error::Let(e) => write!(f, "let*: {:?}", e),
         }
     }
 }

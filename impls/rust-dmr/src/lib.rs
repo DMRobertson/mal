@@ -7,8 +7,8 @@ pub mod evaluator;
 pub mod interpreter;
 pub mod printer;
 pub mod reader;
-
 pub mod special_forms;
+pub mod types;
+
 mod strings;
 mod tokens;
-pub mod types;

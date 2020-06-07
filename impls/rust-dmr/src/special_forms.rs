@@ -37,21 +37,18 @@ pub enum LetError {
     BindToNonSymbol,
 }
 
-pub fn apply_let(
-    args: &[MalObject],
-    ctx: &mut Context,
-) -> std::result::Result<MalObject, LetError> {
+pub fn apply_let(args: &[MalObject], ctx: &mut Context) -> evaluator::Result {
     use MalObject::{List, Vector};
     let (bindings, obj) = match args.len() {
         2 => Ok((&args[0], &args[1])),
-        n => Err(LetError::WrongArgCount(n)),
+        n => Err(Error::Let(LetError::WrongArgCount(n))),
     }?;
     match bindings {
         List(bindings) | Vector(bindings) if bindings.len() % 2 == 0 => {
             apply_let_evaluate(bindings, obj, ctx)
         }
-        List(_) | Vector(_) => Err(LetError::BindingsOddLength),
-        _ => Err(LetError::BindingsNotSequence),
+        List(_) | Vector(_) => Err(Error::Let(LetError::BindingsOddLength)),
+        _ => Err(Error::Let(LetError::BindingsNotSequence)),
     }
 }
 
@@ -59,18 +56,16 @@ fn apply_let_evaluate(
     bindings: &[MalObject],
     obj: &MalObject,
     ctx: &mut Context,
-) -> std::result::Result<MalObject, LetError> {
+) -> evaluator::Result {
     ctx.env.push();
 
-    let bind = |(key, value): (&MalObject, &MalObject)| -> std::result::Result<(), LetError> {
+    let bind = |(key, value): (&MalObject, &MalObject)| -> Result<(), Error> {
         if let MalObject::Symbol(s) = key {
-            ctx.EVAL(value)
-                .map_err(|_| LetError::ValueEvaluationFailed)
-                .map(|value| {
-                    ctx.env.set(s.clone(), value);
-                })
+            ctx.EVAL(value).map(|value| {
+                ctx.env.set(s.clone(), value);
+            })
         } else {
-            Err(LetError::BindToNonSymbol)
+            Err(Error::Let(LetError::BindToNonSymbol))
         }
     };
 
@@ -78,10 +73,9 @@ fn apply_let_evaluate(
         .iter()
         .tuples()
         .map(bind)
-        .collect::<std::result::Result<Vec<()>, _>>();
+        .collect::<Result<Vec<()>, _>>();
 
-    let let_result =
-        bind_result.and_then(|_| ctx.EVAL(obj).map_err(|_| LetError::ValueEvaluationFailed));
+    let let_result = bind_result.and_then(|_| ctx.EVAL(obj));
     ctx.env.pop();
     let_result
 }
