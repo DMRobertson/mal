@@ -12,7 +12,7 @@ pub enum Error {
     Let(special_forms::LetError),
     Do(special_forms::DoError),
     TypeMismatch(types::TypeMismatch),
-    BadArgCount(&'static PrimitiveFn, usize),
+    BadArgCount(&'static str, types::Arity, usize),
     DivideByZero,
 }
 
@@ -43,10 +43,10 @@ impl fmt::Display for Error {
             Error::Def(e) => write!(f, "def!: {:?}", e),
             Error::Let(e) => write!(f, "let*: {:?}", e),
             Error::Do(e) => write!(f, "do*: {:?}", e),
-            Error::BadArgCount(func, count) => write!(
+            Error::BadArgCount(name, arity, count) => write!(
                 f,
                 "Function {} expected {} arguments, but received {} arguments",
-                func.name, func.arity, count
+                name, arity, count
             ),
             Error::DivideByZero => write!(f, "cannot divide by zero!"),
         }
@@ -104,14 +104,13 @@ fn fetch_symbol<'a>(s: &MalSymbol, env: &'a EnvironmentStack) -> Result<&'a MalO
 }
 
 pub fn call_primitive(func: &'static PrimitiveFn, args: &[MalObject]) -> Result {
-    use types::Arity;
     log::debug!("Call {} with {:?}", func.name, args);
-    let count_correct = match &func.arity {
-        Arity::Bounded(range) => range.contains(&args.len()),
-        Arity::BoundedBelow(range) => range.contains(&args.len()),
-    };
-    if !count_correct {
-        return Err(Error::BadArgCount(func, args.len()));
+    if !func.arity.contains(args.len()) {
+        return Err(Error::BadArgCount(
+            func.name,
+            func.arity.clone(),
+            args.len(),
+        ));
     };
     let result = (func.fn_ptr)(args);
     log::debug!("Call to {} resulted in {:?}", func.name, result);

@@ -26,29 +26,40 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Arity {
-    Bounded(RangeInclusive<usize>),
-    BoundedBelow(RangeFrom<usize>),
+    Between(RangeInclusive<usize>),
+    AtLeast(RangeFrom<usize>),
 }
 
 impl Arity {
     pub(crate) const fn exactly(n: usize) -> Self {
-        Self::Bounded(n..=n)
+        Self::Between(n..=n)
+    }
+
+    pub(crate) const fn at_least(n: usize) -> Self {
+        Self::AtLeast(n..)
+    }
+
+    pub(crate) fn contains(&self, n: usize) -> bool {
+        match self {
+            Self::Between(range) => range.contains(&n),
+            Self::AtLeast(range) => range.contains(&n),
+        }
     }
 }
 
 impl fmt::Display for Arity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Arity::Bounded(r) => {
+            Arity::Between(r) => {
                 if r.start() == r.end() {
                     write!(f, "exactly {}", r.start())
                 } else {
                     write!(f, "from {} to {}", r.start(), r.end())
                 }
             }
-            Arity::BoundedBelow(r) => write!(f, "At least {}", r.start),
+            Arity::AtLeast(r) => write!(f, "At least {}", r.start),
         }
     }
 }
@@ -94,6 +105,7 @@ pub(crate) fn truthy(obj: &MalObject) -> bool {
 #[derive(Debug)]
 pub enum TypeMismatch {
     NotAnInt,
+    NotAList,
 }
 
 impl TryFrom<&MalObject> for MalInt {
