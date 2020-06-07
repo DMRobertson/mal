@@ -12,4 +12,4 @@ mod strings;
 mod tokens;
 mod types;
 
-pub use types::MalObject;
+pub use types::{MalList, MalObject};
