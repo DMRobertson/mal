@@ -23,6 +23,7 @@ fn apply(argv: &[MalObject], ctx: &mut evaluator::Context) -> evaluator::Result 
             "def!" => return special_forms::apply_def(&argv[1..], ctx),
             "let*" => return special_forms::apply_let(&argv[1..], ctx),
             "do" => return special_forms::apply_do(&argv[1..], ctx),
+            "if" => return special_forms::apply_if(&argv[1..], ctx),
             _ => (),
         };
     };

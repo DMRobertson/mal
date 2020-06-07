@@ -1,6 +1,6 @@
 use crate::evaluator;
 use crate::evaluator::Context;
-use crate::types::MalObject;
+use crate::types::{truthy, Arity, MalObject};
 use itertools::Itertools;
 
 use evaluator::Error;
@@ -90,4 +90,19 @@ pub fn apply_do(args: &[MalObject], ctx: &mut Context) -> evaluator::Result {
     let result: Result<Vec<MalObject>, _> = args.iter().map(|obj| ctx.EVAL(obj)).collect();
     // TODO returning a copy here---doesn't feel right
     Ok(result?.last().unwrap().clone())
+}
+
+pub fn apply_if(args: &[MalObject], ctx: &mut Context) -> evaluator::Result {
+    const ARITY: Arity = Arity::Between(2..=3);
+    if !ARITY.contains(args.len()) {
+        return Err(Error::BadArgCount("if", ARITY, args.len()));
+    }
+    let condition = ctx.EVAL(&args[0])?;
+    if truthy(&condition) {
+        ctx.EVAL(&args[1])
+    } else if args.len() == 3 {
+        ctx.EVAL(&args[2])
+    } else {
+        Ok(MalObject::Nil)
+    }
 }

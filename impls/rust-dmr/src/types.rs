@@ -81,6 +81,16 @@ pub enum MalObject {
     Primitive(&'static PrimitiveFn),
 }
 
+pub(crate) fn truthy(obj: &MalObject) -> bool {
+    use MalObject::*;
+    match obj {
+        List(_) | Vector(_) | Map(_) | Integer(_) | Symbol(_) | String(_) | Keyword(_)
+        | Primitive(_) => true,
+        Bool(t) => *t,
+        Nil => false,
+    }
+}
+
 #[derive(Debug)]
 pub enum TypeMismatch {
     NotAnInt,

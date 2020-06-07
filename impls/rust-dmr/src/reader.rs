@@ -129,7 +129,12 @@ fn read_plain_chars(chars: &str) -> Result {
         },
         c if ascii_digit(c) => read_int(chars),
         ':' => Ok(build_keyword(&chars[1..])),
-        _ => Ok(build_symbol(chars)),
+        _ => match chars {
+            "true" => Ok(MalObject::Bool(true)),
+            "false" => Ok(MalObject::Bool(false)),
+            "nil" => Ok(MalObject::Nil),
+            _ => Ok(build_symbol(chars)),
+        },
     }
 }
 
