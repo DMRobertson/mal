@@ -12,7 +12,7 @@ pub enum Error {
     LetError(special_forms::LetError),
 }
 
-pub type Evaluator = fn(&MalObject, &mut EnvironmentStack) -> Result;
+pub type Evaluator = fn(&MalObject, &mut Context) -> Result;
 
 pub struct Context<'a> {
     pub env: &'a mut EnvironmentStack,
@@ -23,7 +23,7 @@ pub struct Context<'a> {
 impl<'a> Context<'a> {
     #[allow(non_snake_case)]
     pub(crate) fn EVAL(&mut self, obj: &MalObject) -> Result {
-        (self.evaluator)(obj, &mut self.env)
+        (self.evaluator)(obj, self)
     }
 }
 
@@ -41,7 +41,22 @@ impl fmt::Display for Error {
     }
 }
 
-pub fn evaluate_ast(ast: &MalObject, ctx: &mut Context) -> Result {
+pub fn eval_ast_or_apply(
+    ast: &MalObject,
+    ctx: &mut Context,
+    apply: fn(&[MalObject], &mut Context) -> Result,
+) -> Result {
+    use MalObject::List;
+    match ast {
+        List(list) => match list.len() {
+            0 => Ok(List(MalList::new())),
+            _ => apply(list, ctx),
+        },
+        _ => evaluate_ast(ast, ctx),
+    }
+}
+
+fn evaluate_ast(ast: &MalObject, ctx: &mut Context) -> Result {
     log::debug!("eval_ast {:?}", ast);
     match ast {
         MalObject::Symbol(s) => fetch_symbol(s, &ctx.env).map(|obj| obj.clone()),

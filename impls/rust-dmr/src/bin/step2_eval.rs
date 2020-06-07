@@ -1,31 +1,18 @@
 use rust_dmr_mal::interpreter::{PRINT, READ};
-use rust_dmr_mal::types::{MalList, MalObject};
+use rust_dmr_mal::types::MalObject;
 use rust_dmr_mal::{cmdline, environment, evaluator, interpreter, printer};
 
 fn rep(line: &str, env: &mut environment::EnvironmentStack) -> printer::Result {
-    PRINT(&READ(line).and_then(|ast| EVAL(&ast, env).map_err(interpreter::Error::Eval)))
-}
-
-#[allow(non_snake_case)]
-fn EVAL(ast: &MalObject, env: &mut environment::EnvironmentStack) -> evaluator::Result {
-    use MalObject::List;
-    log::debug!("eval {:?}", ast);
-
-    // Not the biggest fan of this. Wanted a way to call back to EVAL while still keeping the boring bits that don't change between steps in the library.
     let mut ctx = evaluator::Context {
         env,
         evaluator: EVAL,
     };
+    PRINT(&READ(line).and_then(|ast| EVAL(&ast, &mut ctx).map_err(interpreter::Error::Eval)))
+}
 
-    let result = match ast {
-        List(list) => match list.len() {
-            0 => Ok(List(MalList::new())),
-            _ => apply(list, &mut ctx),
-        },
-        _ => evaluator::evaluate_ast(ast, &mut ctx),
-    };
-    log::debug!("eval produced {:?}", result);
-    result
+#[allow(non_snake_case)]
+fn EVAL(ast: &MalObject, ctx: &mut evaluator::Context) -> evaluator::Result {
+    evaluator::eval_ast_or_apply(ast, ctx, apply)
 }
 
 fn apply(argv: &[MalObject], ctx: &mut evaluator::Context) -> evaluator::Result {
