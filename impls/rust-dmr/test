@@ -7,7 +7,7 @@ FG_RESET="\e[0;39m"
 
 function test {
 	pushd "$ABS_PWD/../../" || return 1
-	make "test^rust-dmr^step$1" || { echo -e "${FG_BOLD_BRIGHT_RED}step $1 failed${RESET}"; return 1; }
+	make "test^rust-dmr^step$1" || { echo -e "${FG_BOLD_BRIGHT_RED}step $1 failed${RESET}" > /dev/stderr; return 1; }
 }
 
 if [ "$#" -eq 0 ] ; then
@@ -15,10 +15,10 @@ if [ "$#" -eq 0 ] ; then
 	for ((i=0; i<TOTAL_STEPS; i++)) ; do
 		test "$i" || exit 1
 	done
-	echo -e "${FG_BOLD_BRIGHT_GREEN}NOICE${FG_RESET}"
+	echo -e "${FG_BOLD_BRIGHT_GREEN}NOICE${FG_RESET}" > /dev/stderr
 elif [ "$#" -eq 1 ] ; then
 	test "$1" || exit 1
 else
-	echo "Wrong number of arguments (got $#, expected 0 or 1"
+	echo "Wrong number of arguments (got $#, expected 0 or 1" > /dev/stderr
 	exit 1
 fi
