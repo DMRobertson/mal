@@ -1,9 +1,8 @@
-use crate::evaluator;
-use crate::evaluator::Context;
 use crate::types::{truthy, Arity, MalObject};
 use itertools::Itertools;
 
-use evaluator::Error;
+use crate::environment::Environment;
+use crate::evaluator::{Error, Result, EVAL};
 
 #[derive(Debug)]
 pub enum DefError {
@@ -11,7 +10,7 @@ pub enum DefError {
     KeyNotASymbol,
 }
 
-pub fn apply_def(args: &[MalObject], ctx: &mut Context) -> evaluator::Result {
+pub fn apply_def(args: &[MalObject], env: &mut Environment) -> Result {
     let (key, value) = match args.len() {
         2 => Ok((&args[0], &args[1])),
         n => Err(Error::Def(DefError::WrongArgCount(n))),
@@ -20,8 +19,8 @@ pub fn apply_def(args: &[MalObject], ctx: &mut Context) -> evaluator::Result {
         MalObject::Symbol(s) => Ok(s),
         _ => Err(Error::Def(DefError::KeyNotASymbol)),
     }?;
-    let value = ctx.EVAL(value)?;
-    ctx.env.set(key.clone(), value.clone());
+    let value = EVAL(value, env)?;
+    env.set(key.clone(), value.clone());
     // Shouldn't this return a reference to the object in the map?
     Ok(value)
 }
@@ -35,7 +34,7 @@ pub enum LetError {
     BindToNonSymbol,
 }
 
-pub fn apply_let(args: &[MalObject], ctx: &mut Context) -> evaluator::Result {
+pub fn apply_let(args: &[MalObject], env: &mut Environment) -> Result {
     use MalObject::{List, Vector};
     let (bindings, obj) = match args.len() {
         2 => Ok((&args[0], &args[1])),
@@ -43,24 +42,20 @@ pub fn apply_let(args: &[MalObject], ctx: &mut Context) -> evaluator::Result {
     }?;
     match bindings {
         List(bindings) | Vector(bindings) if bindings.len() % 2 == 0 => {
-            apply_let_evaluate(bindings, obj, ctx)
+            apply_let_evaluate(bindings, obj, env)
         }
         List(_) | Vector(_) => Err(Error::Let(LetError::BindingsOddLength)),
         _ => Err(Error::Let(LetError::BindingsNotSequence)),
     }
 }
 
-fn apply_let_evaluate(
-    bindings: &[MalObject],
-    obj: &MalObject,
-    ctx: &mut Context,
-) -> evaluator::Result {
-    ctx.env.push();
+fn apply_let_evaluate(bindings: &[MalObject], obj: &MalObject, env: &mut Environment) -> Result {
+    let mut child = env.spawn();
 
-    let bind = |(key, value): (&MalObject, &MalObject)| -> Result<(), Error> {
+    let bind = |(key, value): (&MalObject, &MalObject)| -> std::result::Result<(), Error> {
         if let MalObject::Symbol(s) = key {
-            ctx.EVAL(value).map(|value| {
-                ctx.env.set(s.clone(), value);
+            EVAL(value, &mut child).map(|value| {
+                child.set(s.clone(), value);
             })
         } else {
             Err(Error::Let(LetError::BindToNonSymbol))
@@ -71,10 +66,9 @@ fn apply_let_evaluate(
         .iter()
         .tuples()
         .map(bind)
-        .collect::<Result<Vec<()>, _>>();
+        .collect::<std::result::Result<Vec<()>, _>>();
 
-    let let_result = bind_result.and_then(|_| ctx.EVAL(obj));
-    ctx.env.pop();
+    let let_result = bind_result.and_then(|_| EVAL(obj, &mut child));
     let_result
 }
 
@@ -83,25 +77,26 @@ pub enum DoError {
     NothingToDo,
 }
 
-pub fn apply_do(args: &[MalObject], ctx: &mut Context) -> evaluator::Result {
+pub fn apply_do(args: &[MalObject], env: &mut Environment) -> Result {
     if args.is_empty() {
         return Err(Error::Do(DoError::NothingToDo));
     }
-    let result: Result<Vec<MalObject>, _> = args.iter().map(|obj| ctx.EVAL(obj)).collect();
+    let result: std::result::Result<Vec<MalObject>, _> =
+        args.iter().map(|obj| EVAL(obj, env)).collect();
     // TODO returning a copy here---doesn't feel right
     Ok(result?.last().unwrap().clone())
 }
 
-pub fn apply_if(args: &[MalObject], ctx: &mut Context) -> evaluator::Result {
+pub fn apply_if(args: &[MalObject], env: &mut Environment) -> Result {
     const ARITY: Arity = Arity::Between(2..=3);
     if !ARITY.contains(args.len()) {
         return Err(Error::BadArgCount("if", ARITY, args.len()));
     }
-    let condition = ctx.EVAL(&args[0])?;
+    let condition = EVAL(&args[0], env)?;
     if truthy(&condition) {
-        ctx.EVAL(&args[1])
+        EVAL(&args[1], env)
     } else if args.len() == 3 {
-        ctx.EVAL(&args[2])
+        EVAL(&args[2], env)
     } else {
         Ok(MalObject::Nil)
     }

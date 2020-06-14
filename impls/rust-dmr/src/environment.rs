@@ -2,46 +2,43 @@ use crate::core;
 use crate::types::{MalObject, MalSymbol};
 use std::collections::HashMap;
 
-pub type Environment = HashMap<MalSymbol, MalObject>;
-
-pub struct EnvironmentStack {
-    envs: Vec<Environment>,
+pub struct Environment<'a> {
+    data: HashMap<MalSymbol, MalObject>,
+    parent: Option<&'a Environment<'a>>,
 }
 
-impl EnvironmentStack {
-    pub(crate) fn push(&mut self) {
-        self.envs.push(Environment::new());
-    }
-
-    pub(crate) fn pop(&mut self) {
-        self.envs.pop();
-    }
-
+impl Environment<'_> {
     pub fn set<T>(&mut self, key: T, value: MalObject) -> Option<MalObject>
     where
         T: Into<MalSymbol>,
     {
-        let map = self
-            .envs
-            .iter_mut()
-            .last()
-            .unwrap_or_else(|| panic!("No environments in stack"));
-        map.insert(key.into(), value)
+        self.data.insert(key.into(), value)
     }
 
+    // The guide would have us call this "find", but it seems more rustic for get to return an Option.
     pub fn get(&self, key: &MalSymbol) -> Option<&MalObject> {
-        self.envs.iter().rev().find_map(|env| env.get(key))
+        self.data
+            .get(key)
+            .or_else(|| self.parent.map(|parent| parent.get(key)).flatten())
     }
-}
 
-impl Default for EnvironmentStack {
-    fn default() -> Self {
-        let mut stack = Self { envs: Vec::new() };
-        stack.push();
+    pub(crate) fn default() -> Self {
+        let mut data = HashMap::new();
         for (&name, &func) in core::CORE.iter() {
-            stack.set(name, MalObject::Primitive(func.clone()));
+            data.insert(
+                MalSymbol {
+                    name: name.to_string(),
+                },
+                MalObject::Primitive(func.clone()),
+            );
         }
+        Self { data, parent: None }
+    }
 
-        stack
+    pub(crate) fn spawn(&self) -> Environment {
+        Environment {
+            data: HashMap::new(),
+            parent: Some(self),
+        }
     }
 }

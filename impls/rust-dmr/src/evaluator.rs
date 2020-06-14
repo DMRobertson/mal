@@ -1,4 +1,4 @@
-use crate::environment::EnvironmentStack;
+use crate::environment::Environment;
 use crate::types::{MalList, MalMap, MalObject, MalSymbol, PrimitiveFn};
 use crate::{special_forms, types};
 use std::fmt;
@@ -14,21 +14,6 @@ pub enum Error {
     TypeMismatch(types::TypeMismatch),
     BadArgCount(&'static str, types::Arity, usize),
     DivideByZero,
-}
-
-pub type Evaluator = fn(&MalObject, &mut Context) -> Result;
-
-pub struct Context<'a> {
-    pub env: &'a mut EnvironmentStack,
-    #[allow(non_snake_case)]
-    pub evaluator: Evaluator,
-}
-
-impl<'a> Context<'a> {
-    #[allow(non_snake_case)]
-    pub(crate) fn EVAL(&mut self, obj: &MalObject) -> Result {
-        (self.evaluator)(obj, self)
-    }
 }
 
 impl fmt::Display for Error {
@@ -53,37 +38,34 @@ impl fmt::Display for Error {
     }
 }
 
-pub fn eval_ast_or_apply(
-    ast: &MalObject,
-    ctx: &mut Context,
-    apply: fn(&[MalObject], &mut Context) -> Result,
-) -> Result {
+#[allow(non_snake_case)]
+pub(crate) fn EVAL(ast: &MalObject, env: &mut Environment) -> Result {
     use MalObject::List;
     match ast {
         List(list) => match list.len() {
             0 => Ok(List(MalList::new())),
-            _ => apply(list, ctx),
+            _ => apply(list, env),
         },
-        _ => evaluate_ast(ast, ctx),
+        _ => evaluate_ast(ast, env),
     }
 }
 
-fn evaluate_ast(ast: &MalObject, ctx: &mut Context) -> Result {
+fn evaluate_ast(ast: &MalObject, env: &mut Environment) -> Result {
     log::debug!("eval_ast {:?}", ast);
     match ast {
-        MalObject::Symbol(s) => fetch_symbol(s, &ctx.env).map(|obj| obj.clone()),
-        MalObject::List(list) => evaluate_sequence_elementwise(list, ctx).map(MalObject::List),
-        MalObject::Vector(vec) => evaluate_sequence_elementwise(vec, ctx).map(MalObject::Vector),
-        MalObject::Map(map) => evaluate_map(map, ctx),
+        MalObject::Symbol(s) => fetch_symbol(s, env).map(|obj| obj.clone()),
+        MalObject::List(list) => evaluate_sequence_elementwise(list, env).map(MalObject::List),
+        MalObject::Vector(vec) => evaluate_sequence_elementwise(vec, env).map(MalObject::Vector),
+        MalObject::Map(map) => evaluate_map(map, env),
         _ => Ok(ast.clone()),
     }
 }
 
-fn evaluate_map(map: &MalMap, ctx: &mut Context) -> Result {
+fn evaluate_map(map: &MalMap, env: &mut Environment) -> Result {
     let mut evaluated = MalMap::new();
     for key in map.keys() {
         let old_value = map.get(key).unwrap();
-        let new_value = ctx.EVAL(old_value)?;
+        let new_value = EVAL(old_value, env)?;
         evaluated.insert(key.clone(), new_value);
     }
     Ok(MalObject::Map(evaluated))
@@ -91,16 +73,36 @@ fn evaluate_map(map: &MalMap, ctx: &mut Context) -> Result {
 
 pub fn evaluate_sequence_elementwise(
     seq: &[MalObject],
-    ctx: &mut Context,
+    env: &mut Environment,
 ) -> std::result::Result<Vec<MalObject>, Error> {
     let mapped: std::result::Result<Vec<MalObject>, Error> =
-        seq.iter().map(|obj| ctx.EVAL(obj)).collect();
+        seq.iter().map(|obj| EVAL(obj, env)).collect();
     mapped
 }
 
-fn fetch_symbol<'a>(s: &MalSymbol, env: &'a EnvironmentStack) -> Result<&'a MalObject> {
+fn fetch_symbol<'a>(s: &MalSymbol, env: &'a Environment) -> Result<&'a MalObject> {
     env.get(s)
         .ok_or_else(|| Error::UnknownSymbol(s.name.clone()))
+}
+
+fn apply(argv: &[MalObject], env: &mut Environment) -> Result {
+    use MalObject::{Primitive, Symbol};
+    log::debug!("apply {:?}", argv);
+    if let Symbol(MalSymbol { name }) = &argv[0] {
+        match name.as_str() {
+            "def!" => return special_forms::apply_def(&argv[1..], env),
+            "let*" => return special_forms::apply_let(&argv[1..], env),
+            "do" => return special_forms::apply_do(&argv[1..], env),
+            "if" => return special_forms::apply_if(&argv[1..], env),
+            _ => (),
+        };
+    };
+    let evaluated = evaluate_sequence_elementwise(argv, env)?;
+    let (callable, args) = evaluated.split_first().unwrap();
+    match callable {
+        Primitive(f) => call_primitive(f, args),
+        _ => panic!("apply: bad MalObject {:?}", evaluated),
+    }
 }
 
 pub fn call_primitive(func: &'static PrimitiveFn, args: &[MalObject]) -> Result {

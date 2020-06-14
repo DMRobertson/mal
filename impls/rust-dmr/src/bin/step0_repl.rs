@@ -20,6 +20,6 @@ fn rep(line: &str) -> printer::Result {
 }
 
 fn main() -> std::io::Result<()> {
-    let rep_dummy = |s: &str, _: &mut environment::EnvironmentStack| rep(s);
+    let rep_dummy = |s: &str, _: &mut environment::Environment| rep(s);
     cmdline::run(rep_dummy)
 }

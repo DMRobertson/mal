@@ -5,12 +5,12 @@ use std::path::PathBuf;
 
 pub fn run<F>(rep: F) -> std::io::Result<()>
 where
-    F: Fn(&str, &mut environment::EnvironmentStack) -> printer::Result,
+    F: Fn(&str, &mut environment::Environment) -> printer::Result,
 {
     pretty_env_logger::init();
     let interface = setup()?;
-    let mut envs = environment::EnvironmentStack::default();
-    let processor = |line: &str| rep(line, &mut envs);
+    let mut env = environment::Environment::default();
+    let processor = |line: &str| rep(line, &mut env);
     repl(&interface, processor);
     save_history(&interface)?;
     Ok(())
