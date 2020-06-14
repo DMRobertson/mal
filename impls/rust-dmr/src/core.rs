@@ -142,12 +142,49 @@ const COUNT: PrimitiveFn = PrimitiveFn {
     arity: Arity::exactly(1),
 };
 
+fn equal(args: &[MalObject]) -> evaluator::Result {
+    Ok(MalObject::Bool(equal_(args)))
+}
+
+fn equal_(args: &[MalObject]) -> bool {
+    use MalObject::*;
+    match &args[..2] {
+        [Integer(x), Integer(y)] => x == y,
+        [Bool(x), Bool(y)] => x == y,
+        [List(x), List(y)]
+        | [List(x), Vector(y)]
+        | [Vector(x), List(y)]
+        | [Vector(x), Vector(y)] => equal_sequences(x, y),
+        [String(x), String(y)] => x == y,
+        [Keyword(x), Keyword(y)] => x == y,
+        [Nil, Nil] => true,
+        [_, _] => false,
+        _ => unreachable!(),
+    }
+}
+
+// TODO Something very wrong here---shouldn't be cloning. I think the PrimitiveFns should be taking their args as refs!
+// But let's get it working first.
+fn equal_sequences(xs: &[MalObject], ys: &[MalObject]) -> bool {
+    xs.len() == ys.len()
+        && xs
+            .iter()
+            .zip(ys)
+            .all(|(x, y)| equal_(&[x.clone(), y.clone()]))
+}
+
+const EQUAL: PrimitiveFn = PrimitiveFn {
+    name: "=",
+    fn_ptr: equal,
+    arity: Arity::exactly(2),
+};
+
 type Namespace = HashMap<&'static str, &'static PrimitiveFn>;
 lazy_static! {
     pub static ref CORE: Namespace = {
         let mut map = Namespace::new();
         for func in &[
-            SUM, SUB, MUL, DIV, LIST, LIST_TEST, EMPTY_TEST, COUNT, GT, GE, LT, LE,
+            SUM, SUB, MUL, DIV, LIST, LIST_TEST, EMPTY_TEST, COUNT, GT, GE, LT, LE, EQUAL,
         ] {
             map.insert(func.name, func);
         }
