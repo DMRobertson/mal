@@ -1,5 +1,6 @@
 use crate::types::{Arity, MalInt, MalObject, PrimitiveFn};
-use crate::{evaluator, types};
+use crate::{evaluator, printer, types};
+use itertools::Itertools;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 
@@ -179,12 +180,57 @@ const EQUAL: PrimitiveFn = PrimitiveFn {
     arity: Arity::exactly(2),
 };
 
+fn print_string_internal(
+    args: &[MalObject],
+    mode: printer::PrintMode,
+    sep: &'static str,
+    to_screen: bool,
+) -> evaluator::Result {
+    let text = args.iter().map(|arg| printer::pr_str(arg, mode)).join(sep);
+    if to_screen {
+        // TODO bypassing the "interface" in cmdline.rs. Maybe that's fine?
+        println!("{}", text);
+        Ok(MalObject::Nil)
+    } else {
+        Ok(MalObject::String(text))
+    }
+}
+
+const PR_STR: PrimitiveFn = PrimitiveFn {
+    name: "pr-str",
+    fn_ptr: |args| {
+        print_string_internal(args, printer::PrintMode::ReadableRepresentation, " ", false)
+    },
+    arity: Arity::at_least(0),
+};
+
+const STR: PrimitiveFn = PrimitiveFn {
+    name: "str",
+    fn_ptr: |args| print_string_internal(args, printer::PrintMode::Directly, "", false),
+    arity: Arity::at_least(0),
+};
+
+const PRN: PrimitiveFn = PrimitiveFn {
+    name: "prn",
+    fn_ptr: |args| {
+        print_string_internal(args, printer::PrintMode::ReadableRepresentation, " ", true)
+    },
+    arity: Arity::at_least(0),
+};
+
+const PRINTLN: PrimitiveFn = PrimitiveFn {
+    name: "println",
+    fn_ptr: |args| print_string_internal(args, printer::PrintMode::Directly, " ", true),
+    arity: Arity::at_least(0),
+};
+
 type Namespace = HashMap<&'static str, &'static PrimitiveFn>;
 lazy_static! {
     pub static ref CORE: Namespace = {
         let mut map = Namespace::new();
         for func in &[
-            SUM, SUB, MUL, DIV, LIST, LIST_TEST, EMPTY_TEST, COUNT, GT, GE, LT, LE, EQUAL,
+            SUM, SUB, MUL, DIV, LIST, LIST_TEST, EMPTY_TEST, COUNT, GT, GE, LT, LE, EQUAL, PR_STR,
+            STR, PRN, PRINTLN,
         ] {
             map.insert(func.name, func);
         }

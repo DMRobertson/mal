@@ -13,7 +13,10 @@ pub fn print(result: &interpreter::Result) -> Result {
     use reader::Error::*;
     log::debug!("print {:?}", result);
     match result {
-        Ok(obj) => Ok(Outcome::String(pr_str(&obj, PrintMode::Representation))),
+        Ok(obj) => Ok(Outcome::String(pr_str(
+            &obj,
+            PrintMode::ReadableRepresentation,
+        ))),
         Err(Read(ReadComment)) => Ok(Outcome::Empty),
         Err(Read(e)) => Err(format!("{}", e)),
         Err(Eval(e)) => Err(format!("{}", e)),
@@ -22,12 +25,12 @@ pub fn print(result: &interpreter::Result) -> Result {
 
 #[derive(Clone, Copy)]
 pub enum PrintMode {
-    Informal,
-    Representation,
+    ReadableRepresentation,
+    Directly,
 }
 
 // More idiomatic to impl Display for MalObject?
-fn pr_str(object: &MalObject, mode: PrintMode) -> String {
+pub(crate) fn pr_str(object: &MalObject, mode: PrintMode) -> String {
     match object {
         // TODO not sure that passing the mode through here is the right choice.
         // Think we ought to distinguish ala Python between str() and repr().
@@ -50,8 +53,8 @@ fn pr_str(object: &MalObject, mode: PrintMode) -> String {
 
 fn print_as_string(payload: &str, mode: PrintMode) -> String {
     match mode {
-        PrintMode::Informal => payload.to_string(),
-        PrintMode::Representation => strings::print_string_repr(payload),
+        PrintMode::ReadableRepresentation => strings::string_repr(payload),
+        PrintMode::Directly => payload.to_string(),
     }
 }
 
@@ -63,11 +66,11 @@ fn print_map_contents(map: &MalMap) -> String {
     let mut output = String::new();
     for (key, value) in map.iter() {
         output.push_str(&match key {
-            HashKey::String(s) => print_as_string(&s, PrintMode::Representation),
+            HashKey::String(s) => print_as_string(&s, PrintMode::ReadableRepresentation),
             HashKey::Keyword(s) => print_as_keyword(&s),
         });
         output.push(' ');
-        output.push_str(&pr_str(&value, PrintMode::Representation));
+        output.push_str(&pr_str(&value, PrintMode::ReadableRepresentation));
         output.push(' ');
     }
     // Remove last space

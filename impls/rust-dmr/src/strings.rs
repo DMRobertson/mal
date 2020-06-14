@@ -75,7 +75,7 @@ impl Iterator for StringPrinter<'_> {
     }
 }
 
-pub(crate) fn print_string_repr(src: &str) -> String {
+pub(crate) fn string_repr(src: &str) -> String {
     let mut output = String::new();
     output.push('"');
     for (char1, char2) in StringPrinter::new(src) {
