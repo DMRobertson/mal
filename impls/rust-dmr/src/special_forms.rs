@@ -3,6 +3,7 @@ use itertools::Itertools;
 
 use crate::environment::Environment;
 use crate::evaluator::{Error, Result, EVAL};
+use std::rc::Rc;
 
 #[derive(Debug)]
 pub enum DefError {
@@ -10,7 +11,7 @@ pub enum DefError {
     KeyNotASymbol,
 }
 
-pub fn apply_def(args: &[MalObject], env: &mut Environment) -> Result {
+pub fn apply_def(args: &[MalObject], env: &Rc<Environment>) -> Result {
     let (key, value) = match args.len() {
         2 => Ok((&args[0], &args[1])),
         n => Err(Error::Def(DefError::WrongArgCount(n))),
@@ -34,7 +35,7 @@ pub enum LetError {
     BindToNonSymbol,
 }
 
-pub fn apply_let(args: &[MalObject], env: &mut Environment) -> Result {
+pub fn apply_let(args: &[MalObject], env: &Rc<Environment>) -> Result {
     use MalObject::{List, Vector};
     let (bindings, obj) = match args.len() {
         2 => Ok((&args[0], &args[1])),
@@ -49,12 +50,12 @@ pub fn apply_let(args: &[MalObject], env: &mut Environment) -> Result {
     }
 }
 
-fn apply_let_evaluate(bindings: &[MalObject], obj: &MalObject, env: &mut Environment) -> Result {
-    let mut child = env.spawn();
+fn apply_let_evaluate(bindings: &[MalObject], obj: &MalObject, env: &Rc<Environment>) -> Result {
+    let child = Rc::new(Environment::spawn_from(env));
 
     let bind = |(key, value): (&MalObject, &MalObject)| -> std::result::Result<(), Error> {
         if let MalObject::Symbol(s) = key {
-            EVAL(value, &mut child).map(|value| {
+            EVAL(value, &child).map(|value| {
                 child.set(s.clone(), value);
             })
         } else {
@@ -68,8 +69,7 @@ fn apply_let_evaluate(bindings: &[MalObject], obj: &MalObject, env: &mut Environ
         .map(bind)
         .collect::<std::result::Result<Vec<()>, _>>();
 
-    let let_result = bind_result.and_then(|_| EVAL(obj, &mut child));
-    let_result
+    bind_result.and_then(|_| EVAL(obj, &child))
 }
 
 #[derive(Debug)]
@@ -77,7 +77,7 @@ pub enum DoError {
     NothingToDo,
 }
 
-pub fn apply_do(args: &[MalObject], env: &mut Environment) -> Result {
+pub fn apply_do(args: &[MalObject], env: &Rc<Environment>) -> Result {
     if args.is_empty() {
         return Err(Error::Do(DoError::NothingToDo));
     }
@@ -87,7 +87,7 @@ pub fn apply_do(args: &[MalObject], env: &mut Environment) -> Result {
     Ok(result?.last().unwrap().clone())
 }
 
-pub fn apply_if(args: &[MalObject], env: &mut Environment) -> Result {
+pub fn apply_if(args: &[MalObject], env: &Rc<Environment>) -> Result {
     const ARITY: Arity = Arity::Between(2..=3);
     if !ARITY.contains(args.len()) {
         return Err(Error::BadArgCount("if", ARITY, args.len()));

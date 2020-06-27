@@ -65,7 +65,8 @@ fn comparison_(args: &[MalObject], comp: fn(&MalInt, &MalInt) -> bool) -> evalua
     }
 }
 
-// TODO I don't know if this really justifies a macro... but it was an interesting learning experience!
+// TODO I don't know if this really justifies a macro... but it was an
+// interesting learning experience!
 macro_rules! comparison_primitive {
     ($SYMBOL:tt, $NAME:ident) => {
         paste::item! {
@@ -84,7 +85,7 @@ comparison_primitive!(>, GT);
 comparison_primitive!(>=, GE);
 
 fn list_(args: &[MalObject]) -> evaluator::Result {
-    Ok(MalObject::List(args.to_vec()))
+    Ok(MalObject::wrap_list(args.to_vec()))
 }
 
 const LIST: PrimitiveFn = PrimitiveFn {
@@ -164,8 +165,9 @@ fn equal_(args: &[MalObject]) -> bool {
     }
 }
 
-// TODO Something very wrong here---shouldn't be cloning. I think the PrimitiveFns should be taking their args as refs!
-// But let's get it working first.
+// TODO Something very wrong here---shouldn't be cloning. I think the
+// PrimitiveFns should be taking their args as refs! But let's get it working
+// first.
 fn equal_sequences(xs: &[MalObject], ys: &[MalObject]) -> bool {
     xs.len() == ys.len()
         && xs

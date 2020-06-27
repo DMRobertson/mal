@@ -5,6 +5,7 @@ use crate::types::{
     build_keyword, build_map, build_string, build_symbol, MalInt, MalList, MalObject, MapError,
 };
 use std::iter::Peekable;
+use std::rc::Rc;
 use std::{fmt, slice};
 
 type Reader<'a> = Peekable<slice::Iter<'a, Token<'a>>>;
@@ -78,11 +79,11 @@ fn read_form(reader: &mut Reader) -> Result {
 }
 
 fn read_list(reader: &mut Reader) -> Result {
-    read_sequence(reader, Close::List).map(MalObject::List)
+    read_sequence(reader, Close::List).map(MalObject::wrap_list)
 }
 
 fn read_vector(reader: &mut Reader) -> Result {
-    read_sequence(reader, Close::Vector).map(MalObject::Vector)
+    read_sequence(reader, Close::Vector).map(MalObject::wrap_vector)
 }
 
 fn read_map(reader: &mut Reader) -> Result {
@@ -155,7 +156,7 @@ fn read_unary_operand(reader: &mut Reader, opname: &str) -> Result {
     let mut list = MalList::new();
     list.push(build_symbol(opname));
     list.push(read_form(reader)?);
-    Ok(MalObject::List(list))
+    Ok(MalObject::List(Rc::new(list)))
 }
 
 fn read_with_meta(reader: &mut Reader) -> Result {
@@ -165,5 +166,5 @@ fn read_with_meta(reader: &mut Reader) -> Result {
     let second = read_form(reader)?;
     list.push(second);
     list.push(first);
-    Ok(MalObject::List(list))
+    Ok(MalObject::List(Rc::new(list)))
 }

@@ -1,3 +1,4 @@
+use crate::environment::Environment;
 use crate::strings::BuildError;
 use crate::tokens::StringLiteral;
 use crate::{evaluator, strings};
@@ -6,6 +7,7 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt;
 use std::ops::{RangeFrom, RangeInclusive};
+use std::rc::Rc;
 
 pub type MalList = Vec<MalObject>;
 pub type MalVector = Vec<MalObject>;
@@ -76,19 +78,18 @@ impl fmt::Debug for PrimitiveFn {
     }
 }
 
-pub type PrimitiveBinaryOp = fn(MalInt, MalInt) -> MalInt;
 
 #[derive(Debug, Clone)]
 pub enum MalObject {
-    List(MalList),
-    Vector(MalVector),
-    Map(MalMap),
-    Integer(MalInt),
-    Symbol(MalSymbol),
-    String(String),
-    Keyword(String),
-    Bool(bool),
     Nil,
+    Integer(MalInt),
+    Bool(bool),
+    String(String),
+    Symbol(MalSymbol),
+    Keyword(String),
+    List(Rc<MalList>),
+    Vector(Rc<MalVector>),
+    Map(Rc<MalMap>),
     Primitive(&'static PrimitiveFn),
 }
 
@@ -146,7 +147,7 @@ pub(crate) fn build_map(entries: MalVector) -> Result<MalObject, MapError> {
         map.insert(key, value);
         // TODO detect duplicate keys?
     }
-    Ok(MalObject::Map(map))
+    Ok(MalObject::Map(Rc::new(map)))
 }
 
 pub(crate) fn build_symbol(chars: &str) -> MalObject {
@@ -159,4 +160,19 @@ pub(crate) fn build_keyword(chars: &str) -> MalObject {
 
 pub(crate) fn build_string(src: &StringLiteral) -> Result<MalObject, BuildError> {
     strings::build_string(src.payload).map(MalObject::String)
+}
+
+impl MalObject {
+    pub(crate) fn new_sequence() -> Rc<Vec<Self>> {
+        Rc::new(Vec::new())
+    }
+    pub(crate) fn new_list() -> Self {
+        Self::List(Self::new_sequence())
+    }
+    pub(crate) fn wrap_list(elements: Vec<MalObject>) -> Self {
+        Self::List(Rc::new(elements))
+    }
+    pub(crate) fn wrap_vector(elements: Vec<MalObject>) -> Self {
+        Self::Vector(Rc::new(elements))
+    }
 }
