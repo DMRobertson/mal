@@ -1,8 +1,10 @@
-use crate::types::{truthy, Arity, MalObject};
+use crate::types::{truthy, Arity, Closure, MalList, MalObject, MalSymbol};
 use itertools::Itertools;
 
 use crate::environment::Environment;
 use crate::evaluator::{Error, Result, EVAL};
+use crate::special_forms::FnError::ParameterNotASymbol;
+use std::convert::TryFrom;
 use std::rc::Rc;
 
 #[derive(Debug)]
@@ -88,10 +90,9 @@ pub fn apply_do(args: &[MalObject], env: &Rc<Environment>) -> Result {
 }
 
 pub fn apply_if(args: &[MalObject], env: &Rc<Environment>) -> Result {
-    const ARITY: Arity = Arity::Between(2..=3);
-    if !ARITY.contains(args.len()) {
-        return Err(Error::BadArgCount("if", ARITY, args.len()));
-    }
+    Arity::Between(2..=3)
+        .validate_for(args.len(), "if")
+        .map_err(Error::BadArgCount)?;
     let condition = EVAL(&args[0], env)?;
     if truthy(&condition) {
         EVAL(&args[1], env)
@@ -100,4 +101,34 @@ pub fn apply_if(args: &[MalObject], env: &Rc<Environment>) -> Result {
     } else {
         Ok(MalObject::Nil)
     }
+}
+
+#[derive(Debug)]
+pub enum FnError {
+    WrongArgCount(usize),
+    ParametersNotGivenAsList,
+    ParameterNotASymbol,
+}
+
+pub fn apply_fn(args: &[MalObject], env: &Rc<Environment>) -> Result {
+    let (parameters, body) = match args.len() {
+        2 => Ok((&args[0], &args[1])),
+        n => Err(Error::Fn(FnError::WrongArgCount(n))),
+    }?;
+    let parameters = Rc::<MalList>::try_from(parameters)
+        .or(Err(FnError::ParametersNotGivenAsList))
+        .map_err(Error::Fn)?;
+    let extract_symbol = |obj: &MalObject| match obj {
+        MalObject::Symbol(s) => Ok(s.clone()),
+        _ => Err(ParameterNotASymbol),
+    };
+    let parameters: std::result::Result<Vec<MalSymbol>, _> =
+        parameters.iter().map(extract_symbol).collect();
+    let parameters = parameters.map_err(Error::Fn)?;
+    let closure = Closure {
+        parameters,
+        body: body.clone(),
+        env: Environment::spawn_from(env),
+    };
+    Ok(MalObject::Closure(Rc::new(closure)))
 }

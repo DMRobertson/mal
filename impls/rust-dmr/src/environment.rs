@@ -4,7 +4,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-#[derive(Debug)]
 pub struct Environment {
     /* Did a bit of cheating here by consulting the existing rust implementation.
      Consider the following snippet

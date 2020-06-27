@@ -6,6 +6,7 @@ use itertools::Itertools;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt;
+use std::fmt::Formatter;
 use std::ops::{RangeFrom, RangeInclusive};
 use std::rc::Rc;
 
@@ -34,6 +35,23 @@ pub enum Arity {
     AtLeast(RangeFrom<usize>),
 }
 
+#[derive(Debug)]
+pub struct BadArgCount {
+    name: &'static str,
+    expected: Arity,
+    got: usize,
+}
+
+impl fmt::Display for BadArgCount {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "When evaluating {} expected {} arguments, but received {} arguments",
+            self.name, self.expected, self.got
+        )
+    }
+}
+
 impl Arity {
     pub(crate) const fn exactly(n: usize) -> Self {
         Self::Between(n..=n)
@@ -47,6 +65,17 @@ impl Arity {
         match self {
             Self::Between(range) => range.contains(&n),
             Self::AtLeast(range) => range.contains(&n),
+        }
+    }
+
+    pub(crate) fn validate_for(&self, n: usize, name: &'static str) -> Result<(), BadArgCount> {
+        match self.contains(n) {
+            true => Ok(()),
+            false => Err(BadArgCount {
+                name,
+                expected: self.clone(),
+                got: n,
+            }),
         }
     }
 }
@@ -78,6 +107,21 @@ impl fmt::Debug for PrimitiveFn {
     }
 }
 
+pub struct Closure {
+    pub parameters: Vec<MalSymbol>,
+    pub body: MalObject,
+    pub env: Environment,
+}
+
+impl fmt::Debug for Closure {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Closure{{parameters: {:?}, body: {:?}}}",
+            self.parameters, self.body
+        )
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum MalObject {
@@ -91,13 +135,14 @@ pub enum MalObject {
     Vector(Rc<MalVector>),
     Map(Rc<MalMap>),
     Primitive(&'static PrimitiveFn),
+    Closure(Rc<Closure>),
 }
 
 pub(crate) fn truthy(obj: &MalObject) -> bool {
     use MalObject::*;
     match obj {
         List(_) | Vector(_) | Map(_) | Integer(_) | Symbol(_) | String(_) | Keyword(_)
-        | Primitive(_) => true,
+        | Primitive(_) | Closure(_) => true,
         Bool(t) => *t,
         Nil => false,
     }
@@ -107,6 +152,7 @@ pub(crate) fn truthy(obj: &MalObject) -> bool {
 pub enum TypeMismatch {
     NotAnInt,
     NotAList,
+    NotASymbol,
 }
 
 impl TryFrom<&MalObject> for MalInt {
@@ -116,6 +162,17 @@ impl TryFrom<&MalObject> for MalInt {
         match value {
             MalObject::Integer(x) => Ok(*x),
             _ => Err(TypeMismatch::NotAnInt),
+        }
+    }
+}
+
+impl TryFrom<&MalObject> for Rc<MalList> {
+    type Error = TypeMismatch;
+
+    fn try_from(value: &MalObject) -> Result<Self, Self::Error> {
+        match value {
+            MalObject::List(x) => Ok(x.clone()),
+            _ => Err(TypeMismatch::NotAList),
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::types::{HashKey, MalMap, MalObject};
+use crate::types::{Closure, HashKey, MalMap, MalObject};
 use crate::{interpreter, reader, strings};
 use itertools::Itertools;
 
@@ -34,12 +34,8 @@ pub(crate) fn pr_str(object: &MalObject, mode: PrintMode) -> String {
     match object {
         // TODO not sure that passing the mode through here is the right choice.
         // Think we ought to distinguish ala Python between str() and repr().
-        MalObject::List(elements) => {
-            format!("({})", elements.iter().map(|x| pr_str(x, mode)).join(" "))
-        }
-        MalObject::Vector(elements) => {
-            format!("[{}]", elements.iter().map(|x| pr_str(x, mode)).join(" "))
-        }
+        MalObject::List(elements) => format!("({})", print_sequence_contents(elements, mode)),
+        MalObject::Vector(elements) => format!("[{}]", print_sequence_contents(elements, mode)),
         MalObject::Map(map) => format!("{{{}}}", print_map_contents(map)),
         MalObject::Integer(value) => value.to_string(),
         MalObject::Symbol(s) => s.name.clone(),
@@ -48,8 +44,12 @@ pub(crate) fn pr_str(object: &MalObject, mode: PrintMode) -> String {
         MalObject::Keyword(payload) => print_as_keyword(payload),
         MalObject::Bool(payload) => String::from(if *payload { "true" } else { "false" }),
         MalObject::Primitive(f) => format!("{:?}", f),
-        MalObject::Closure(f) => format!("{:?}", f),
+        MalObject::Closure(f) => print_closure(f),
     }
+}
+
+fn print_sequence_contents(seq: &[MalObject], mode: PrintMode) -> String {
+    seq.iter().map(|x| pr_str(x, mode)).join(" ")
 }
 
 fn print_as_string(payload: &str, mode: PrintMode) -> String {
@@ -77,4 +77,12 @@ fn print_map_contents(map: &MalMap) -> String {
     // Remove last space
     output.pop();
     output
+}
+
+fn print_closure(f: &Closure) -> String {
+    format!(
+        "(fn* ({}) {})",
+        f.parameters.iter().map(|s| &s.name).join(" "),
+        pr_str(&f.body, PrintMode::ReadableRepresentation)
+    )
 }

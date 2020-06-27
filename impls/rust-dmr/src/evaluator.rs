@@ -12,8 +12,9 @@ pub enum Error {
     Def(special_forms::DefError),
     Let(special_forms::LetError),
     Do(special_forms::DoError),
+    Fn(special_forms::FnError),
     TypeMismatch(types::TypeMismatch),
-    BadArgCount(&'static str, types::Arity, usize),
+    BadArgCount(types::BadArgCount),
     DivideByZero,
 }
 
@@ -28,12 +29,9 @@ impl fmt::Display for Error {
             Error::TypeMismatch(e) => write!(f, "type mismatch: {:?}", e),
             Error::Def(e) => write!(f, "def!: {:?}", e),
             Error::Let(e) => write!(f, "let*: {:?}", e),
-            Error::Do(e) => write!(f, "do*: {:?}", e),
-            Error::BadArgCount(name, arity, count) => write!(
-                f,
-                "Function {} expected {} arguments, but received {} arguments",
-                name, arity, count
-            ),
+            Error::Do(e) => write!(f, "do: {:?}", e),
+            Error::Fn(e) => write!(f, "fn*: {:?}", e),
+            Error::BadArgCount(e) => write!(f, "{}", e),
             Error::DivideByZero => write!(f, "cannot divide by zero!"),
         }
     }
@@ -83,7 +81,7 @@ pub fn evaluate_sequence_elementwise(
     mapped
 }
 
-fn fetch_symbol(s: &MalSymbol, env: &Environment) -> Result<MalObject> {
+fn fetch_symbol(s: &MalSymbol, env: &Environment) -> Result {
     env.get(s)
         .ok_or_else(|| Error::UnknownSymbol(s.name.clone()))
 }
@@ -97,6 +95,7 @@ fn apply(argv: &[MalObject], env: &Rc<Environment>) -> Result {
             "let*" => return special_forms::apply_let(&argv[1..], env),
             "do" => return special_forms::apply_do(&argv[1..], env),
             "if" => return special_forms::apply_if(&argv[1..], env),
+            "fn*" => return special_forms::apply_fn(&argv[1..], env),
             _ => (),
         };
     };
@@ -110,13 +109,9 @@ fn apply(argv: &[MalObject], env: &Rc<Environment>) -> Result {
 
 pub fn call_primitive(func: &'static PrimitiveFn, args: &[MalObject]) -> Result {
     log::debug!("Call {} with {:?}", func.name, args);
-    if !func.arity.contains(args.len()) {
-        return Err(Error::BadArgCount(
-            func.name,
-            func.arity.clone(),
-            args.len(),
-        ));
-    };
+    func.arity
+        .validate_for(args.len(), func.name)
+        .map_err(Error::BadArgCount)?;
     let result = (func.fn_ptr)(args);
     log::debug!("Call to {} resulted in {:?}", func.name, result);
     result
