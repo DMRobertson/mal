@@ -157,7 +157,7 @@ pub(crate) fn truthy(obj: &MalObject) -> bool {
 #[derive(Debug)]
 pub enum TypeMismatch {
     NotAnInt,
-    NotAList,
+    NotASequence,
     NotASymbol,
 }
 
@@ -178,7 +178,8 @@ impl TryFrom<&MalObject> for Rc<MalList> {
     fn try_from(value: &MalObject) -> Result<Self, Self::Error> {
         match value {
             MalObject::List(x) => Ok(x.clone()),
-            _ => Err(TypeMismatch::NotAList),
+            MalObject::Vector(x) => Ok(x.clone()),
+            _ => Err(TypeMismatch::NotASequence),
         }
     }
 }

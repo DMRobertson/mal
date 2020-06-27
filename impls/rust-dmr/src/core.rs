@@ -113,7 +113,7 @@ fn empty_test_(args: &[MalObject]) -> evaluator::Result {
         MalObject::List(list) => Ok(list.is_empty()),
         MalObject::Vector(vec) => Ok(vec.is_empty()),
         _ => Err(evaluator::Error::TypeMismatch(
-            types::TypeMismatch::NotAList,
+            types::TypeMismatch::NotASequence,
         )),
     }
     .map(MalObject::Bool)
@@ -132,7 +132,7 @@ fn count_(args: &[MalObject]) -> evaluator::Result {
         MalObject::Nil => Ok(0 as MalInt),
         _ => Err(evaluator::Error::TypeMismatch(
             // TODO better error here!
-            types::TypeMismatch::NotAList,
+            types::TypeMismatch::NotASequence,
         )),
     }
     .map(MalObject::Integer)
