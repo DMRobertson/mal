@@ -53,7 +53,7 @@ pub fn apply_let(args: &[MalObject], env: &Rc<Environment>) -> Result {
 }
 
 fn apply_let_evaluate(bindings: &[MalObject], obj: &MalObject, env: &Rc<Environment>) -> Result {
-    let child = Rc::new(Environment::spawn_from(env));
+    let child = Environment::spawn_from(env);
 
     let bind = |(key, value): (&MalObject, &MalObject)| -> std::result::Result<(), Error> {
         if let MalObject::Symbol(s) = key {
@@ -128,7 +128,7 @@ pub fn apply_fn(args: &[MalObject], env: &Rc<Environment>) -> Result {
     let closure = Closure {
         parameters,
         body: body.clone(),
-        env: Environment::spawn_from(env),
+        parent: env.clone(),
     };
     Ok(MalObject::Closure(Rc::new(closure)))
 }

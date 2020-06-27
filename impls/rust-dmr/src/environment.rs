@@ -63,10 +63,10 @@ impl Environment {
         }
     }
 
-    pub(crate) fn spawn_from(parent: &Rc<Environment>) -> Environment {
-        Environment {
+    pub(crate) fn spawn_from(parent: &Rc<Environment>) -> Rc<Environment> {
+        Rc::new(Environment {
             data: RefCell::new(HashMap::new()),
             parent: Some(parent.clone()),
-        }
+        })
     }
 }

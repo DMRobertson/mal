@@ -110,7 +110,13 @@ impl fmt::Debug for PrimitiveFn {
 pub struct Closure {
     pub parameters: Vec<MalSymbol>,
     pub body: MalObject,
-    pub env: Environment,
+    pub parent: Rc<Environment>,
+}
+
+impl Closure {
+    pub fn arity(&self) -> Arity {
+        Arity::exactly(self.parameters.len())
+    }
 }
 
 impl fmt::Debug for Closure {

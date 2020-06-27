@@ -1,5 +1,5 @@
 use crate::environment::Environment;
-use crate::types::{MalMap, MalObject, MalSymbol, PrimitiveFn};
+use crate::types::{Closure, MalMap, MalObject, MalSymbol, PrimitiveFn};
 use crate::{special_forms, types};
 use std::fmt;
 use std::rc::Rc;
@@ -87,7 +87,7 @@ fn fetch_symbol(s: &MalSymbol, env: &Environment) -> Result {
 }
 
 fn apply(argv: &[MalObject], env: &Rc<Environment>) -> Result {
-    use MalObject::{Primitive, Symbol};
+    use MalObject::{Closure, Primitive, Symbol};
     log::debug!("apply {:?}", argv);
     if let Symbol(MalSymbol { name }) = &argv[0] {
         match name.as_str() {
@@ -103,6 +103,7 @@ fn apply(argv: &[MalObject], env: &Rc<Environment>) -> Result {
     let (callable, args) = evaluated.split_first().unwrap();
     match callable {
         Primitive(f) => call_primitive(f, args),
+        Closure(f) => call_closure(f, args),
         _ => panic!("apply: bad MalObject {:?}", evaluated),
     }
 }
@@ -115,4 +116,16 @@ pub fn call_primitive(func: &'static PrimitiveFn, args: &[MalObject]) -> Result 
     let result = (func.fn_ptr)(args);
     log::debug!("Call to {} resulted in {:?}", func.name, result);
     result
+}
+
+fn call_closure(func: &Closure, args: &[MalObject]) -> Result {
+    log::debug!("Call closure {:?} with {:?}", func, args);
+    func.arity()
+        .validate_for(args.len(), "closure")
+        .map_err(Error::BadArgCount)?;
+    let env = Environment::spawn_from(&func.parent);
+    for (key, value) in func.parameters.iter().zip(args) {
+        env.set(key.clone(), value.clone());
+    }
+    EVAL(&func.body, &env)
 }
