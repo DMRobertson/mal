@@ -1,7 +1,6 @@
 use rust_dmr_mal::interpreter::{PRINT, READ};
 use rust_dmr_mal::types::MalObject;
-use rust_dmr_mal::{cmdline, environment, interpreter, printer};
-use std::rc::Rc;
+use rust_dmr_mal::{cmdline, interpreter, printer};
 
 #[allow(non_snake_case)]
 fn EVAL(result: MalObject) -> interpreter::Result {
@@ -13,6 +12,5 @@ fn rep(line: &str) -> printer::Result {
 }
 
 fn main() -> std::io::Result<()> {
-    let rep_dummy = |s: &str, _: &Rc<environment::Environment>| rep(s);
-    cmdline::run(rep_dummy)
+    cmdline::run(rep)
 }

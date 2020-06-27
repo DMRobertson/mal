@@ -35,7 +35,7 @@ impl Environment {
     }
 
     // The guide would have us call this "find", and have a "get" which errors if
-    // there's no value mathching `key`. But it seems more rustic for get to return
+    // there's no value matching `key`. But it seems more rustic for get to return
     // an Option.
     pub fn get(&self, key: &MalSymbol) -> Option<MalObject> {
         match self.data.borrow().get(key) {
@@ -47,7 +47,14 @@ impl Environment {
         }
     }
 
-    pub(crate) fn default() -> Self {
+    pub fn empty() -> Self {
+        Self {
+            data: RefCell::new(HashMap::new()),
+            parent: None,
+        }
+    }
+
+    pub fn default() -> Self {
         let mut data = HashMap::new();
         for (&name, &func) in core::CORE.iter() {
             data.insert(

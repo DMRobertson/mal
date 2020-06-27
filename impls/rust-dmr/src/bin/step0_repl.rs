@@ -1,5 +1,4 @@
-use rust_dmr_mal::{cmdline, environment, printer};
-use std::rc::Rc;
+use rust_dmr_mal::{cmdline, printer};
 
 #[allow(non_snake_case)]
 fn READ(line: &str) -> &str {
@@ -21,6 +20,5 @@ fn rep(line: &str) -> printer::Result {
 }
 
 fn main() -> std::io::Result<()> {
-    let rep_dummy = |s: &str, _: &Rc<environment::Environment>| rep(s);
-    cmdline::run(rep_dummy)
+    cmdline::run(rep)
 }
