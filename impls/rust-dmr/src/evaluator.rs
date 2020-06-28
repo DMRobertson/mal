@@ -50,7 +50,7 @@ pub(crate) fn EVAL(ast: &MalObject, env: &Rc<Environment>) -> Result {
 }
 
 fn evaluate_ast(ast: &MalObject, env: &Rc<Environment>) -> Result {
-    log::debug!("eval_ast {:?}", ast);
+    log::trace!("evaluate_ast {:?}", ast);
     match ast {
         MalObject::Symbol(s) => fetch_symbol(s, env),
         MalObject::List(list) => evaluate_sequence_elementwise(list, env).map(MalObject::wrap_list),
@@ -120,12 +120,19 @@ pub fn call_primitive(func: &'static PrimitiveFn, args: &[MalObject]) -> Result 
 
 fn call_closure(func: &Closure, args: &[MalObject]) -> Result {
     log::debug!("Call closure {:?} with {:?}", func, args);
-    func.arity()
+    func.parameters
+        .arity()
         .validate_for(args.len(), "closure")
         .map_err(Error::BadArgCount)?;
     let env = Environment::spawn_from(&func.parent);
-    for (key, value) in func.parameters.iter().zip(args) {
+
+    let (positional, rest) = args.split_at(func.parameters.positional.len());
+    for (key, value) in func.parameters.positional.iter().zip(positional) {
         env.set(key.clone(), value.clone());
+    }
+    if let Some(rest_key) = &func.parameters.others {
+        let rest = rest.iter().map(|obj| obj.clone()).collect();
+        env.set(rest_key.clone(), MalObject::wrap_list(rest));
     }
     EVAL(&func.body, &env)
 }

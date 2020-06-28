@@ -1,9 +1,11 @@
-use crate::types::{truthy, Arity, Closure, MalList, MalObject, MalSymbol};
+use crate::types::{
+    truthy, Arity, BadClosureParameters, Closure, ClosureParameters, MalList, MalObject, MalSymbol,
+};
 use itertools::Itertools;
 
 use crate::environment::Environment;
 use crate::evaluator::{Error, Result, EVAL};
-use crate::special_forms::FnError::ParameterNotASymbol;
+use crate::special_forms::FnError::{BadVariadic, ParameterNotASymbol};
 use std::convert::TryFrom;
 use std::rc::Rc;
 
@@ -108,9 +110,13 @@ pub enum FnError {
     WrongArgCount(usize),
     ParametersNotGivenAsList,
     ParameterNotASymbol,
+    BadVariadic(BadClosureParameters),
 }
 
 pub fn apply_fn(args: &[MalObject], env: &Rc<Environment>) -> Result {
+    // Start by checking that we've been given the right kind of arguments.
+    // We expect exactly two arguments. The first, a parameters list, should be a sequence of symbols.
+    // The second, the expression body of the function we're defining, is any MalObject.
     let (parameters, body) = match args.len() {
         2 => Ok((&args[0], &args[1])),
         n => Err(Error::Fn(FnError::WrongArgCount(n))),
@@ -124,9 +130,10 @@ pub fn apply_fn(args: &[MalObject], env: &Rc<Environment>) -> Result {
     };
     let parameters: std::result::Result<Vec<MalSymbol>, _> =
         parameters.iter().map(extract_symbol).collect();
+
     let parameters = parameters.map_err(Error::Fn)?;
     let closure = Closure {
-        parameters,
+        parameters: ClosureParameters::new(parameters).map_err(|e| Error::Fn(BadVariadic(e)))?,
         body: body.clone(),
         parent: env.clone(),
     };

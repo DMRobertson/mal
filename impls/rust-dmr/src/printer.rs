@@ -82,7 +82,7 @@ fn print_map_contents(map: &MalMap) -> String {
 fn print_closure(f: &Closure) -> String {
     format!(
         "(fn* ({}) {})",
-        f.parameters.iter().map(|s| &s.name).join(" "),
+        f.parameters,
         pr_str(&f.body, PrintMode::ReadableRepresentation)
     )
 }

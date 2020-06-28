@@ -107,16 +107,72 @@ impl fmt::Debug for PrimitiveFn {
     }
 }
 
-pub struct Closure {
-    pub parameters: Vec<MalSymbol>,
-    pub body: MalObject,
-    pub parent: Rc<Environment>,
+#[derive(Debug)]
+pub struct ClosureParameters {
+    pub positional: Vec<MalSymbol>,
+    pub others: Option<MalSymbol>,
 }
 
-impl Closure {
-    pub fn arity(&self) -> Arity {
-        Arity::exactly(self.parameters.len())
+impl fmt::Display for ClosureParameters {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.positional.iter().map(|s| &s.name).join(" "))?;
+        if let Some(rest) = &self.others {
+            write!(f, " & {}", rest.name)?;
+        }
+        Ok(())
     }
+}
+
+#[derive(Debug)]
+pub enum BadClosureParameters {
+    TooManyAmpersands(usize),
+    TooShortForAmpersand,
+    AmpersandPositionNotPenultimate,
+}
+
+impl ClosureParameters {
+    pub fn new(mut symbols: Vec<MalSymbol>) -> Result<Self, BadClosureParameters> {
+        let is_ampersand = |s: &&MalSymbol| s.name == "&";
+        let ampersand_count = symbols.iter().filter(is_ampersand).count();
+
+        match ampersand_count {
+            0 => Ok(ClosureParameters {
+                positional: symbols,
+                others: None,
+            }),
+            1 => {
+                if symbols.len() < 2 {
+                    return Err(BadClosureParameters::TooShortForAmpersand);
+                }
+                let penultimate = symbols.get(symbols.len() - 2).unwrap();
+                match is_ampersand(&penultimate) {
+                    false => Err(BadClosureParameters::AmpersandPositionNotPenultimate),
+                    true => {
+                        let variadic_name = symbols.pop().unwrap();
+                        let _ampersand = symbols.pop();
+                        Ok(ClosureParameters {
+                            positional: symbols,
+                            others: Some(variadic_name),
+                        })
+                    }
+                }
+            }
+            _ => Err(BadClosureParameters::TooManyAmpersands(ampersand_count)),
+        }
+    }
+
+    pub fn arity(&self) -> Arity {
+        match self.others {
+            None => Arity::exactly(self.positional.len()),
+            Some(_) => Arity::at_least(self.positional.len()),
+        }
+    }
+}
+
+pub struct Closure {
+    pub parameters: ClosureParameters,
+    pub body: MalObject,
+    pub parent: Rc<Environment>,
 }
 
 impl fmt::Debug for Closure {
