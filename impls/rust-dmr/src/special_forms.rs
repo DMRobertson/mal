@@ -4,7 +4,7 @@ use crate::types::{
 use itertools::Itertools;
 
 use crate::environment::Environment;
-use crate::evaluator::{Error, Result, EVAL};
+use crate::evaluator::{Error, EvalContext, Result, EVAL};
 use crate::special_forms::FnError::{BadVariadic, ParameterNotASymbol};
 use std::convert::TryFrom;
 use std::rc::Rc;
@@ -39,7 +39,7 @@ pub enum LetError {
     BindToNonSymbol,
 }
 
-pub fn apply_let(args: &[MalObject], env: &Rc<Environment>) -> Result {
+pub fn apply_let(args: &[MalObject], env: &Rc<Environment>) -> Result<EvalContext> {
     use MalObject::{List, Vector};
     let (bindings, obj) = match args.len() {
         2 => Ok((&args[0], &args[1])),
@@ -47,18 +47,22 @@ pub fn apply_let(args: &[MalObject], env: &Rc<Environment>) -> Result {
     }?;
     match bindings {
         List(bindings) | Vector(bindings) if bindings.len() % 2 == 0 => {
-            apply_let_evaluate(bindings, obj, env)
+            make_let_environment(bindings, env).and_then(|child| Ok((obj.clone(), child)))
         }
         List(_) | Vector(_) => Err(Error::Let(LetError::BindingsOddLength)),
         _ => Err(Error::Let(LetError::BindingsNotSequence)),
     }
 }
 
-fn apply_let_evaluate(bindings: &[MalObject], obj: &MalObject, env: &Rc<Environment>) -> Result {
-    let child = Environment::spawn_from(env);
+fn make_let_environment(
+    bindings: &[MalObject],
+    parent: &Rc<Environment>,
+) -> Result<Rc<Environment>> {
+    let child = Environment::spawn_from(parent);
 
     let bind = |(key, value): (&MalObject, &MalObject)| -> std::result::Result<(), Error> {
         if let MalObject::Symbol(s) = key {
+            // Note: evaluate in the child so that later bindings can refer to earlier ones
             EVAL(value, &child).map(|value| {
                 child.set(s.clone(), value);
             })
@@ -67,13 +71,12 @@ fn apply_let_evaluate(bindings: &[MalObject], obj: &MalObject, env: &Rc<Environm
         }
     };
 
-    let bind_result = bindings
+    bindings
         .iter()
         .tuples()
         .map(bind)
-        .collect::<std::result::Result<Vec<()>, _>>();
-
-    bind_result.and_then(|_| EVAL(obj, &child))
+        .collect::<std::result::Result<Vec<()>, _>>()?;
+    Ok(child)
 }
 
 #[derive(Debug)]
@@ -81,7 +84,7 @@ pub enum DoError {
     NothingToDo,
 }
 
-pub fn apply_do(args: &[MalObject], env: &Rc<Environment>) -> Result {
+pub fn apply_do(args: &[MalObject], env: &Rc<Environment>) -> Result<MalObject> {
     if args.is_empty() {
         return Err(Error::Do(DoError::NothingToDo));
     }
@@ -97,9 +100,9 @@ pub fn apply_if(args: &[MalObject], env: &Rc<Environment>) -> Result {
         .map_err(Error::BadArgCount)?;
     let condition = EVAL(&args[0], env)?;
     if truthy(&condition) {
-        EVAL(&args[1], env)
+        Ok(args[1].clone())
     } else if args.len() == 3 {
-        EVAL(&args[2], env)
+        Ok(args[2].clone())
     } else {
         Ok(MalObject::Nil)
     }

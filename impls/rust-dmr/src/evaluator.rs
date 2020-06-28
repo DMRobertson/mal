@@ -1,6 +1,7 @@
 use crate::environment::Environment;
 use crate::types::{Closure, MalMap, MalObject, MalSymbol, PrimitiveFn};
 use crate::{special_forms, types};
+use std::borrow::Cow;
 use std::fmt;
 use std::rc::Rc;
 
@@ -37,19 +38,62 @@ impl fmt::Display for Error {
     }
 }
 
+pub(crate) type EvalContext = (MalObject, Rc<Environment>);
+
 #[allow(non_snake_case)]
-pub(crate) fn EVAL(ast: &MalObject, env: &Rc<Environment>) -> Result {
+pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
     use MalObject::List;
-    match ast {
-        List(list) => match list.len() {
-            0 => Ok(MalObject::new_list()),
-            _ => apply(list, env),
-        },
-        _ => evaluate_ast(ast, env),
+    use MalObject::{Closure, Primitive, Symbol};
+    let mut ast = Cow::Borrowed(orig_ast);
+    let mut env = Cow::Borrowed(orig_env);
+    loop {
+        match &*ast {
+            List(argv) => match argv.len() {
+                0 => return Ok(MalObject::new_list()),
+                _ => {
+                    log::debug!("apply {:?}", argv);
+                    if let Symbol(MalSymbol { name }) = &argv[0] {
+                        match name.as_str() {
+                            "def!" => return special_forms::apply_def(&argv[1..], &env),
+                            "let*" => {
+                                let (new_ast, new_env) =
+                                    special_forms::apply_let(&argv[1..], &env)?;
+                                env = Cow::Owned(new_env);
+                                ast = Cow::Owned(new_ast);
+                                continue;
+                            }
+                            "do" => {
+                                ast = Cow::Owned(special_forms::apply_do(&argv[1..], &env)?);
+                                continue;
+                            }
+                            "if" => {
+                                ast = Cow::Owned(special_forms::apply_if(&argv[1..], &env)?);
+                                continue;
+                            }
+                            "fn*" => return special_forms::apply_fn(&argv[1..], &env),
+                            // Any other initial symbol will be interpreted a a function call and handled below
+                            _ => (),
+                        };
+                    };
+                    let evaluated = evaluate_sequence_elementwise(&*argv, &env)?;
+                    let (callable, args) = evaluated.split_first().unwrap();
+                    match callable {
+                        Primitive(f) => return call_primitive(f, args),
+                        Closure(f) => {
+                            env = Cow::Owned(make_closure_env(f, args)?);
+                            ast = Cow::Owned(f.body.clone());
+                            continue;
+                        }
+                        _ => panic!("apply: bad MalObject {:?}", evaluated),
+                    }
+                }
+            },
+            _ => return evaluate_ast(&ast, &env),
+        };
     }
 }
 
-fn evaluate_ast(ast: &MalObject, env: &Rc<Environment>) -> Result {
+pub(crate) fn evaluate_ast(ast: &MalObject, env: &Rc<Environment>) -> Result {
     log::trace!("evaluate_ast {:?}", ast);
     match ast {
         MalObject::Symbol(s) => fetch_symbol(s, env),
@@ -86,28 +130,6 @@ fn fetch_symbol(s: &MalSymbol, env: &Environment) -> Result {
         .ok_or_else(|| Error::UnknownSymbol(s.name.clone()))
 }
 
-fn apply(argv: &[MalObject], env: &Rc<Environment>) -> Result {
-    use MalObject::{Closure, Primitive, Symbol};
-    log::debug!("apply {:?}", argv);
-    if let Symbol(MalSymbol { name }) = &argv[0] {
-        match name.as_str() {
-            "def!" => return special_forms::apply_def(&argv[1..], env),
-            "let*" => return special_forms::apply_let(&argv[1..], env),
-            "do" => return special_forms::apply_do(&argv[1..], env),
-            "if" => return special_forms::apply_if(&argv[1..], env),
-            "fn*" => return special_forms::apply_fn(&argv[1..], env),
-            _ => (),
-        };
-    };
-    let evaluated = evaluate_sequence_elementwise(argv, env)?;
-    let (callable, args) = evaluated.split_first().unwrap();
-    match callable {
-        Primitive(f) => call_primitive(f, args),
-        Closure(f) => call_closure(f, args),
-        _ => panic!("apply: bad MalObject {:?}", evaluated),
-    }
-}
-
 pub fn call_primitive(func: &'static PrimitiveFn, args: &[MalObject]) -> Result {
     log::debug!("Call {} with {:?}", func.name, args);
     func.arity
@@ -118,7 +140,7 @@ pub fn call_primitive(func: &'static PrimitiveFn, args: &[MalObject]) -> Result 
     result
 }
 
-fn call_closure(func: &Closure, args: &[MalObject]) -> Result {
+fn make_closure_env(func: &Closure, args: &[MalObject]) -> Result<Rc<Environment>> {
     log::debug!("Call closure {:?} with {:?}", func, args);
     func.parameters
         .arity()
@@ -134,5 +156,5 @@ fn call_closure(func: &Closure, args: &[MalObject]) -> Result {
         let rest = rest.iter().map(|obj| obj.clone()).collect();
         env.set(rest_key.clone(), MalObject::wrap_list(rest));
     }
-    EVAL(&func.body, &env)
+    Ok(env)
 }
