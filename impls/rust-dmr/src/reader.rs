@@ -59,22 +59,27 @@ fn read_form(reader: &mut Reader) -> Result {
     use crate::tokens::Open::*;
     use crate::tokens::UnaryOp::*;
 
-    let token = reader.next().ok_or(Error::NoMoreTokens)?;
-    log::debug!("read_form, token={:?}", token);
-    match token {
-        Token::Open(List) => read_list(reader),
-        Token::Open(Vector) => read_vector(reader),
-        Token::Open(Map) => read_map(reader),
-        Token::Close(kind) => Err(Error::UnexpectedCloseToken(*kind)),
-        Token::PlainChars(_) => read_atom(token),
-        Token::StringLiteral(s) => build_string(s).map_err(Error::StringError),
-        Token::Comment(_) => Err(Error::ReadComment),
-        Token::UnaryOp(Quote) => read_unary_operand(reader, "quote"),
-        Token::UnaryOp(Quasiquote) => read_unary_operand(reader, "quasiquote"),
-        Token::UnaryOp(Unquote) => read_unary_operand(reader, "unquote"),
-        Token::UnaryOp(Deref) => read_unary_operand(reader, "deref"),
-        Token::UnaryOp(SpliceUnquote) => read_unary_operand(reader, "splice-unquote"),
-        Token::UnaryOp(WithMeta) => read_with_meta(reader),
+    loop {
+        let token = reader.next().ok_or(Error::NoMoreTokens)?;
+        log::debug!("read_form, token={:?}", token);
+        return match token {
+            Token::Open(List) => read_list(reader),
+            Token::Open(Vector) => read_vector(reader),
+            Token::Open(Map) => read_map(reader),
+            Token::Close(kind) => Err(Error::UnexpectedCloseToken(*kind)),
+            Token::PlainChars(_) => read_atom(token),
+            Token::StringLiteral(s) => build_string(s).map_err(Error::StringError),
+            Token::Comment(_) => match &reader.peek() {
+                None => Err(Error::ReadComment),
+                Some(_) => continue,
+            },
+            Token::UnaryOp(Quote) => read_unary_operand(reader, "quote"),
+            Token::UnaryOp(Quasiquote) => read_unary_operand(reader, "quasiquote"),
+            Token::UnaryOp(Unquote) => read_unary_operand(reader, "unquote"),
+            Token::UnaryOp(Deref) => read_unary_operand(reader, "deref"),
+            Token::UnaryOp(SpliceUnquote) => read_unary_operand(reader, "splice-unquote"),
+            Token::UnaryOp(WithMeta) => read_with_meta(reader),
+        };
     }
 }
 
