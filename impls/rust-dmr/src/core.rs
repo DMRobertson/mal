@@ -1,8 +1,9 @@
 use crate::types::{Arity, MalInt, MalObject, PrimitiveFn};
-use crate::{evaluator, printer, types};
+use crate::{evaluator, printer, reader, types};
 use itertools::Itertools;
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::fs::read_to_string;
 
 fn grab_ints(args: &[MalObject]) -> evaluator::Result<Vec<MalInt>> {
     let type_check: Result<Vec<_>, _> = args.iter().map(MalInt::try_from).collect();
@@ -226,13 +227,59 @@ const PRINTLN: PrimitiveFn = PrimitiveFn {
     arity: Arity::at_least(0),
 };
 
+const READ_STRING: PrimitiveFn = PrimitiveFn {
+    name: "read-string",
+    fn_ptr: read_string_,
+    arity: Arity::exactly(1),
+};
+fn read_string_(args: &[MalObject]) -> evaluator::Result {
+    match &args[0] {
+        MalObject::String(s) => reader::read_str(s).map_err(evaluator::Error::ReadError),
+        _ => Err(evaluator::Error::TypeMismatch(
+            types::TypeMismatch::NotAString,
+        )),
+    }
+}
+
+const SLURP: PrimitiveFn = PrimitiveFn {
+    name: "slurp",
+    fn_ptr: slurp_,
+    arity: Arity::exactly(1),
+};
+fn slurp_(args: &[MalObject]) -> evaluator::Result {
+    match &args[0] {
+        MalObject::String(s) => read_to_string(s).map_err(evaluator::Error::IOError),
+        _ => Err(evaluator::Error::TypeMismatch(
+            types::TypeMismatch::NotAString,
+        )),
+    }
+    .map(MalObject::String)
+}
+
 type Namespace = HashMap<&'static str, &'static PrimitiveFn>;
 lazy_static! {
     pub static ref CORE: Namespace = {
         let mut map = Namespace::new();
         for func in &[
-            SUM, SUB, MUL, DIV, LIST, LIST_TEST, EMPTY_TEST, COUNT, GT, GE, LT, LE, EQUAL, PR_STR,
-            STR, PRN, PRINTLN,
+            SUM,
+            SUB,
+            MUL,
+            DIV,
+            LIST,
+            LIST_TEST,
+            EMPTY_TEST,
+            COUNT,
+            GT,
+            GE,
+            LT,
+            LE,
+            EQUAL,
+            PR_STR,
+            STR,
+            PRN,
+            PRINTLN,
+            READ_STRING,
+            SLURP,
         ] {
             map.insert(func.name, func);
         }

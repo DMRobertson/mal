@@ -215,6 +215,7 @@ pub enum TypeMismatch {
     NotAnInt,
     NotASequence,
     NotASymbol,
+    NotAString,
 }
 
 impl TryFrom<&MalObject> for MalInt {

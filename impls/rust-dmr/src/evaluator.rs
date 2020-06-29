@@ -1,6 +1,6 @@
 use crate::environment::Environment;
 use crate::types::{Closure, MalMap, MalObject, MalSymbol, PrimitiveFn};
-use crate::{special_forms, types};
+use crate::{reader, special_forms, types};
 use std::borrow::Cow;
 use std::fmt;
 use std::rc::Rc;
@@ -17,6 +17,9 @@ pub enum Error {
     TypeMismatch(types::TypeMismatch),
     BadArgCount(types::BadArgCount),
     DivideByZero,
+    // TODO the arrangement of all these errors needs a rethink IMO!
+    ReadError(reader::Error),
+    IOError(std::io::Error),
 }
 
 impl fmt::Display for Error {
@@ -34,6 +37,8 @@ impl fmt::Display for Error {
             Error::Fn(e) => write!(f, "fn*: {:?}", e),
             Error::BadArgCount(e) => write!(f, "{}", e),
             Error::DivideByZero => write!(f, "cannot divide by zero!"),
+            Error::ReadError(e) => write!(f, "read error: {}", e),
+            Error::IOError(e) => write!(f, "io error: {}", e),
         }
     }
 }
