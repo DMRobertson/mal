@@ -1,7 +1,12 @@
-use crate::printer;
+use crate::environment::Environment;
+use crate::evaluator::EVAL;
+use crate::types::{MalList, MalObject, MalSymbol};
+use crate::{interpreter, printer};
 use ansi_term::Style;
 use linefeed::{DefaultTerminal, Interface, ReadResult, Terminal};
+use std::cmp::min;
 use std::path::PathBuf;
+use std::rc::Rc;
 
 pub fn run<F>(rep: F) -> std::io::Result<()>
 where
@@ -93,6 +98,61 @@ where
             Err(e) => {
                 writeln!(interface, "Error: {}", e).ok();
                 break;
+            }
+        }
+    }
+}
+
+enum Mode {
+    Repl,
+    Batch(String),
+}
+
+#[derive(Debug)]
+pub enum Error {
+    IO(std::io::Error),
+    BadArguments,
+    RepError(String),
+}
+
+fn process_argv(args: &Vec<String>) -> Mode {
+    log::debug!("Batch mode, args={:?}", args);
+    match args.as_slice() {
+        [] | [_] => Mode::Repl,
+        [_program_name, file_path, ..] => Mode::Batch(file_path.clone()),
+    }
+}
+
+pub fn launch(mut args: Vec<String>, env: &Rc<Environment>) -> Result<(), Error> {
+    let mode = process_argv(&args);
+
+    let script_args = args.split_off(min(args.len(), 2));
+    let script_args = MalObject::wrap_list(
+        script_args
+            .into_iter()
+            .map(|s| MalObject::String(s))
+            .collect(),
+    );
+    env.set(
+        MalSymbol {
+            name: "*ARGV*".to_string(),
+        },
+        script_args,
+    );
+
+    match mode {
+        Mode::Repl => run(|line| interpreter::rep(line, &env)).map_err(Error::IO),
+        Mode::Batch(path) => {
+            let cmd: MalList = vec![
+                MalObject::Symbol(MalSymbol {
+                    name: "load-file".to_string(),
+                }),
+                MalObject::String(path.to_string()),
+            ];
+            log::debug!("Batch mode, run cmd {:?}", cmd);
+            match EVAL(&MalObject::wrap_list(cmd), &env) {
+                Ok(_) => Ok(()),
+                Err(e) => Err(Error::RepError(e.to_string())),
             }
         }
     }
