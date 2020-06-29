@@ -1,4 +1,5 @@
-use crate::types::{Arity, MalInt, MalObject, PrimitiveFn};
+use crate::evaluator::{apply, ApplyOutcome};
+use crate::types::{callable, Arity, Atom, MalInt, MalObject, PrimitiveFn, TypeMismatch};
 use crate::{evaluator, printer, reader, types};
 use itertools::Itertools;
 use std::collections::HashMap;
@@ -169,6 +170,7 @@ fn equal_(args: &[MalObject]) -> bool {
 // TODO Something very wrong here---shouldn't be cloning. I think the
 // PrimitiveFns should be taking their args as refs! But let's get it working
 // first.
+// Update: Think this is fine since MalObject should be cheap to clone?
 fn equal_sequences(xs: &[MalObject], ys: &[MalObject]) -> bool {
     xs.len() == ys.len()
         && xs
@@ -256,6 +258,82 @@ fn slurp_(args: &[MalObject]) -> evaluator::Result {
     .map(MalObject::String)
 }
 
+const ATOM: PrimitiveFn = PrimitiveFn {
+    name: "atom",
+    fn_ptr: atom_,
+    arity: Arity::exactly(1),
+};
+fn atom_(args: &[MalObject]) -> evaluator::Result {
+    Ok(MalObject::Atom(Atom::new(&args[0])))
+}
+const ATOM_TEST: PrimitiveFn = PrimitiveFn {
+    name: "atom?",
+    fn_ptr: atom_test_,
+    arity: Arity::exactly(1),
+};
+fn atom_test_(args: &[MalObject]) -> evaluator::Result {
+    match &args[0] {
+        MalObject::Atom(_) => Ok(MalObject::Bool(true)),
+        _ => Ok(MalObject::Bool(false)),
+    }
+}
+
+const DEREF: PrimitiveFn = PrimitiveFn {
+    name: "deref",
+    fn_ptr: deref_,
+    arity: Arity::exactly(1),
+};
+fn deref_(args: &[MalObject]) -> evaluator::Result {
+    match &args[0] {
+        MalObject::Atom(a) => Ok(a.clone_payload()),
+        _ => Err(evaluator::Error::TypeMismatch(TypeMismatch::NotAnAtom)),
+    }
+}
+
+const RESET: PrimitiveFn = PrimitiveFn {
+    name: "reset!",
+    fn_ptr: reset_,
+    arity: Arity::exactly(2),
+};
+fn reset_(args: &[MalObject]) -> evaluator::Result {
+    match args {
+        [MalObject::Atom(a), obj] => {
+            a.replace(obj);
+            Ok(obj.clone())
+        }
+        [_, _] => Err(evaluator::Error::TypeMismatch(TypeMismatch::NotAnAtom)),
+        _ => unreachable!(),
+    }
+}
+
+const SWAP: PrimitiveFn = PrimitiveFn {
+    name: "swap!",
+    fn_ptr: swap_,
+    arity: Arity::at_least(2),
+};
+fn swap_(swap_args: &[MalObject]) -> evaluator::Result {
+    use MalObject::Atom;
+    match &swap_args[..2] {
+        [Atom(a), f] if callable(f) => {
+            let args = {
+                let mut args = Vec::new();
+                args.push(a.clone_payload());
+                args.extend_from_slice(&swap_args[2..]);
+                args
+            };
+            let result = apply(f, &args);
+            let obj = result.and_then(|outcome| match outcome {
+                ApplyOutcome::Finished(obj) => Ok(obj),
+                ApplyOutcome::EvaluateFurther(ast, env) => evaluator::EVAL(&ast, &env),
+            })?;
+            a.replace(&obj);
+            Ok(obj)
+        }
+        [Atom(_), _] => Err(evaluator::Error::TypeMismatch(TypeMismatch::NotCallable)),
+        _ => unreachable!(),
+    }
+}
+
 type Namespace = HashMap<&'static str, &'static PrimitiveFn>;
 lazy_static! {
     pub static ref CORE: Namespace = {
@@ -280,6 +358,11 @@ lazy_static! {
             PRINTLN,
             READ_STRING,
             SLURP,
+            ATOM,
+            ATOM_TEST,
+            DEREF,
+            RESET,
+            SWAP,
         ] {
             map.insert(func.name, func);
         }

@@ -46,6 +46,7 @@ pub(crate) fn pr_str(object: &MalObject, mode: PrintMode) -> String {
         MalObject::Primitive(f) => format!("{:?}", f),
         MalObject::Closure(f) => print_closure(f),
         MalObject::Eval(e) => format!("{:?}", e),
+        MalObject::Atom(atom) => format!("(atom {})", pr_str(&*atom.borrow_payload(), mode)),
     }
 }
 

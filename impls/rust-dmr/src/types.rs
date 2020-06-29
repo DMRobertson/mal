@@ -3,6 +3,7 @@ use crate::strings::BuildError;
 use crate::tokens::StringLiteral;
 use crate::{evaluator, strings};
 use itertools::Itertools;
+use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt::Formatter;
@@ -197,6 +198,31 @@ impl fmt::Debug for Closure {
 }
 
 #[derive(Debug, Clone)]
+pub struct Atom {
+    payload: Rc<RefCell<MalObject>>,
+}
+
+impl Atom {
+    pub(crate) fn new(obj: &MalObject) -> Self {
+        Self {
+            payload: Rc::new(RefCell::new(obj.clone())),
+        }
+    }
+
+    pub(crate) fn borrow_payload(&self) -> Ref<MalObject> {
+        self.payload.borrow()
+    }
+
+    pub(crate) fn clone_payload(&self) -> MalObject {
+        self.payload.borrow().clone()
+    }
+
+    pub(crate) fn replace(&self, obj: &MalObject) {
+        self.payload.replace(obj.clone());
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum MalObject {
     Nil,
     Integer(MalInt),
@@ -210,15 +236,33 @@ pub enum MalObject {
     Primitive(&'static PrimitiveFn),
     Closure(Rc<Closure>),
     Eval(PrimitiveEval),
+    Atom(Atom),
 }
 
 pub(crate) fn truthy(obj: &MalObject) -> bool {
     use MalObject::*;
     match obj {
         List(_) | Vector(_) | Map(_) | Integer(_) | Symbol(_) | String(_) | Keyword(_)
-        | Primitive(_) | Closure(_) | Eval(_) => true,
+        | Primitive(_) | Closure(_) | Eval(_) | Atom(_) => true,
         Bool(t) => *t,
         Nil => false,
+    }
+}
+
+pub(crate) fn callable(obj: &MalObject) -> bool {
+    use MalObject::*;
+    match obj {
+        Primitive(_) | Closure(_) | Eval(_) => true,
+        Nil => false,
+        Integer(_) => false,
+        Bool(_) => false,
+        String(_) => false,
+        Symbol(_) => false,
+        Keyword(_) => false,
+        List(_) => false,
+        Vector(_) => false,
+        Map(_) => false,
+        Atom(_) => false,
     }
 }
 
@@ -228,6 +272,8 @@ pub enum TypeMismatch {
     NotASequence,
     NotASymbol,
     NotAString,
+    NotAnAtom,
+    NotCallable,
 }
 
 impl TryFrom<&MalObject> for MalInt {

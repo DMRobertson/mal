@@ -1,4 +1,5 @@
 use crate::environment::Environment;
+use crate::evaluator::ApplyOutcome::EvaluateFurther;
 use crate::types::{Arity, Closure, MalMap, MalObject, MalSymbol, PrimitiveEval, PrimitiveFn};
 use crate::{reader, special_forms, types};
 use std::borrow::Cow;
@@ -47,7 +48,7 @@ pub(crate) type EvalContext = (MalObject, Rc<Environment>);
 
 #[allow(non_snake_case)]
 pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
-    use MalObject::{Closure, Eval, List, Primitive, Symbol};
+    use MalObject::{List, Symbol};
     let mut ast = Cow::Borrowed(orig_ast);
     let mut env = Cow::Borrowed(orig_env);
     loop {
@@ -81,25 +82,50 @@ pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
                     };
                     let evaluated = evaluate_sequence_elementwise(&*argv, &env)?;
                     let (callable, args) = evaluated.split_first().unwrap();
-                    match callable {
-                        Primitive(f) => return call_primitive(f, args),
-                        Closure(f) => {
-                            env = Cow::Owned(make_closure_env(f, args)?);
-                            ast = Cow::Owned(f.body.clone());
+                    match apply(callable, args)? {
+                        ApplyOutcome::Finished(obj) => return Ok(obj),
+                        ApplyOutcome::EvaluateFurther(next_ast, next_env) => {
+                            ast = Cow::Owned(next_ast);
+                            env = Cow::Owned(next_env);
                             continue;
                         }
-                        Eval(PrimitiveEval { env }) => {
-                            Arity::exactly(1)
-                                .validate_for(args.len(), "eval")
-                                .map_err(Error::BadArgCount)?;
-                            return EVAL(&args[0], &env.upgrade().expect("eval: env destroyed"));
-                        }
-                        _ => panic!("apply: bad MalObject {:?}", evaluated),
                     }
                 }
             },
             _ => return evaluate_ast(&ast, &env),
         };
+    }
+}
+
+// Want to pull out the apply logic so we can use it in core::SWAP.
+// We still want to allow EVAL above to use TCO, so we might return EvaluateFurther from apply in order to continue the EVAL loop.
+// But this now means we might have to process EvaluateFuther in core::SWAP with a call to EVAL.
+
+// Feels complex---maybe a premature optimisation?
+// Depends how often closures need to EvaluateFurther.
+// I'd imagine the point of lisp is that you want closures that can return calls to other closures, so fairly often?
+pub(crate) enum ApplyOutcome {
+    Finished(MalObject),
+    EvaluateFurther(MalObject, Rc<Environment>),
+}
+
+pub(crate) fn apply(callable: &MalObject, args: &[MalObject]) -> Result<ApplyOutcome> {
+    use MalObject::{Closure, Eval, Primitive};
+    match callable {
+        Primitive(f) => return call_primitive(f, args).map(ApplyOutcome::Finished),
+        Closure(f) => {
+            let ast = f.body.clone();
+            let env = make_closure_env(f, args)?;
+            Ok(ApplyOutcome::EvaluateFurther(ast, env))
+        }
+        Eval(PrimitiveEval { env }) => {
+            Arity::exactly(1)
+                .validate_for(args.len(), "eval")
+                .map_err(Error::BadArgCount)?;
+            let env = env.upgrade().expect("eval: env destroyed");
+            Ok(EvaluateFurther(args[0].clone(), env))
+        }
+        _ => panic!("apply: bad MalObject {:?}", callable),
     }
 }
 
