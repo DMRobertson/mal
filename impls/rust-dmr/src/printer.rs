@@ -45,6 +45,7 @@ pub(crate) fn pr_str(object: &MalObject, mode: PrintMode) -> String {
         MalObject::Bool(payload) => String::from(if *payload { "true" } else { "false" }),
         MalObject::Primitive(f) => format!("{:?}", f),
         MalObject::Closure(f) => print_closure(f),
+        MalObject::Eval(e) => format!("{:?}", e),
     }
 }
 

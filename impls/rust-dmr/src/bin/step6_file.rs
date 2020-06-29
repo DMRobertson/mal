@@ -3,6 +3,7 @@ use std::rc::Rc;
 
 fn main() -> std::io::Result<()> {
     let env = Rc::new(environment::Environment::default());
-    interpreter::rep("(def! not (fn* (a) (if a false true)))", &env).expect("Error during setup");
+    environment::read_prelude(&env).expect("error during setup");
+    environment::add_eval(&env);
     cmdline::run(|line| interpreter::rep(line, &env))
 }

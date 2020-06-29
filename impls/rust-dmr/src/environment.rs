@@ -1,5 +1,5 @@
-use crate::core;
-use crate::types::{MalObject, MalSymbol};
+use crate::types::{MalObject, MalSymbol, PrimitiveEval};
+use crate::{core, interpreter, prelude};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -76,4 +76,26 @@ impl Environment {
             parent: Some(parent.clone()),
         })
     }
+}
+
+pub fn read_prelude(env: &Rc<Environment>) -> Result<(), String> {
+    let result: Result<Vec<_>, _> = prelude::PRELUDE
+        .lines()
+        .map(str::trim)
+        .filter(|s| s.len() > 0)
+        .map(|s| interpreter::rep(s, env))
+        .collect();
+    result.map(|_| ())
+}
+
+pub fn add_eval(env: &Rc<Environment>) {
+    let dummy = MalObject::Eval(PrimitiveEval {
+        env: Rc::downgrade(env),
+    });
+    env.set(
+        MalSymbol {
+            name: "eval".to_string(),
+        },
+        dummy,
+    );
 }

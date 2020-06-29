@@ -5,10 +5,10 @@ use crate::{evaluator, strings};
 use itertools::Itertools;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::fmt;
 use std::fmt::Formatter;
 use std::ops::{RangeFrom, RangeInclusive};
 use std::rc::Rc;
+use std::{fmt, rc};
 
 pub type MalList = Vec<MalObject>;
 pub type MalVector = Vec<MalObject>;
@@ -107,6 +107,17 @@ impl fmt::Debug for PrimitiveFn {
     }
 }
 
+#[derive(Clone)]
+pub struct PrimitiveEval {
+    pub env: rc::Weak<Environment>,
+}
+
+impl fmt::Debug for PrimitiveEval {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "PrimitiveEval")
+    }
+}
+
 #[derive(Debug)]
 pub struct ClosureParameters {
     pub positional: Vec<MalSymbol>,
@@ -198,13 +209,14 @@ pub enum MalObject {
     Map(Rc<MalMap>),
     Primitive(&'static PrimitiveFn),
     Closure(Rc<Closure>),
+    Eval(PrimitiveEval),
 }
 
 pub(crate) fn truthy(obj: &MalObject) -> bool {
     use MalObject::*;
     match obj {
         List(_) | Vector(_) | Map(_) | Integer(_) | Symbol(_) | String(_) | Keyword(_)
-        | Primitive(_) | Closure(_) => true,
+        | Primitive(_) | Closure(_) | Eval(_) => true,
         Bool(t) => *t,
         Nil => false,
     }

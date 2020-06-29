@@ -1,5 +1,5 @@
 use crate::environment::Environment;
-use crate::types::{Closure, MalMap, MalObject, MalSymbol, PrimitiveFn};
+use crate::types::{Arity, Closure, MalMap, MalObject, MalSymbol, PrimitiveEval, PrimitiveFn};
 use crate::{reader, special_forms, types};
 use std::borrow::Cow;
 use std::fmt;
@@ -47,8 +47,7 @@ pub(crate) type EvalContext = (MalObject, Rc<Environment>);
 
 #[allow(non_snake_case)]
 pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
-    use MalObject::List;
-    use MalObject::{Closure, Primitive, Symbol};
+    use MalObject::{Closure, Eval, List, Primitive, Symbol};
     let mut ast = Cow::Borrowed(orig_ast);
     let mut env = Cow::Borrowed(orig_env);
     loop {
@@ -88,6 +87,12 @@ pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
                             env = Cow::Owned(make_closure_env(f, args)?);
                             ast = Cow::Owned(f.body.clone());
                             continue;
+                        }
+                        Eval(PrimitiveEval { env }) => {
+                            Arity::exactly(1)
+                                .validate_for(args.len(), "eval")
+                                .map_err(Error::BadArgCount)?;
+                            return EVAL(&args[0], &env.upgrade().expect("eval: env destroyed"));
                         }
                         _ => panic!("apply: bad MalObject {:?}", evaluated),
                     }
