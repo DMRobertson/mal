@@ -334,6 +334,46 @@ fn swap_(swap_args: &[MalObject]) -> evaluator::Result {
     }
 }
 
+const CONS: PrimitiveFn = PrimitiveFn {
+    name: "cons",
+    fn_ptr: cons_,
+    arity: Arity::exactly(2),
+};
+fn cons_(args: &[MalObject]) -> evaluator::Result {
+    match args {
+        [head, MalObject::List(tail)]
+        //| [head, MalObject::Vector(tail)]
+         => {
+            let mut elements = Vec::new();
+            elements.push(head.clone());
+            elements.extend(tail.iter().map(MalObject::clone));
+            Ok(MalObject::wrap_list(elements))
+        }
+        [_, _] => Err(evaluator::Error::TypeMismatch(TypeMismatch::NotASequence)),
+        _ => unreachable!(),
+    }
+}
+
+const CONCAT: PrimitiveFn = PrimitiveFn {
+    name: "concat",
+    fn_ptr: concat_,
+    arity: Arity::at_least(0),
+};
+fn concat_(args: &[MalObject]) -> evaluator::Result {
+    let mut output = Vec::new();
+    let mut extend = |seq: &MalObject| match seq {
+        MalObject::List(elements) | MalObject::Vector(elements) => {
+            output.extend(elements.iter().map(MalObject::clone));
+            Ok(())
+        }
+        _ => Err(evaluator::Error::TypeMismatch(TypeMismatch::NotASequence)),
+    };
+    for arg in args {
+        extend(arg)?;
+    }
+    Ok(MalObject::wrap_list(output))
+}
+
 type Namespace = HashMap<&'static str, &'static PrimitiveFn>;
 lazy_static! {
     pub static ref CORE: Namespace = {
@@ -363,6 +403,8 @@ lazy_static! {
             DEREF,
             RESET,
             SWAP,
+            CONS,
+            CONCAT,
         ] {
             map.insert(func.name, func);
         }
