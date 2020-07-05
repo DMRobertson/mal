@@ -367,6 +367,7 @@ impl PartialEq for MalObject {
             | [Vector(x), Vector(y)] => equal_sequences(x, y),
             [String(x), String(y)] => x == y,
             [Keyword(x), Keyword(y)] => x == y,
+            [Symbol(x), Symbol(y)] => x == y,
             [Nil, Nil] => true,
             [_, _] => false,
         }
