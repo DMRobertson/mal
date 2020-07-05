@@ -151,32 +151,10 @@ fn equal(args: &[MalObject]) -> evaluator::Result {
 }
 
 fn equal_(args: &[MalObject]) -> bool {
-    use MalObject::*;
     match &args[..2] {
-        [Integer(x), Integer(y)] => x == y,
-        [Bool(x), Bool(y)] => x == y,
-        [List(x), List(y)]
-        | [List(x), Vector(y)]
-        | [Vector(x), List(y)]
-        | [Vector(x), Vector(y)] => equal_sequences(x, y),
-        [String(x), String(y)] => x == y,
-        [Keyword(x), Keyword(y)] => x == y,
-        [Nil, Nil] => true,
-        [_, _] => false,
+        [x, y] => x == y,
         _ => unreachable!(),
     }
-}
-
-// TODO Something very wrong here---shouldn't be cloning. I think the
-// PrimitiveFns should be taking their args as refs! But let's get it working
-// first.
-// Update: Think this is fine since MalObject should be cheap to clone?
-fn equal_sequences(xs: &[MalObject], ys: &[MalObject]) -> bool {
-    xs.len() == ys.len()
-        && xs
-            .iter()
-            .zip(ys)
-            .all(|(x, y)| equal_(&[x.clone(), y.clone()]))
 }
 
 const EQUAL: PrimitiveFn = PrimitiveFn {
