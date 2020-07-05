@@ -1,10 +1,12 @@
 use crate::types::{
-    truthy, Arity, BadClosureParameters, Closure, ClosureParameters, MalList, MalObject, MalSymbol,
+    truthy, Arity, BadArgCount, BadClosureParameters, Closure, ClosureParameters, MalList,
+    MalObject, MalSymbol,
 };
 use itertools::Itertools;
 
 use crate::environment::Environment;
 use crate::evaluator::{Error, EvalContext, Result, EVAL};
+use crate::printer;
 use crate::special_forms::FnError::{BadVariadic, ParameterNotASymbol};
 use std::convert::TryFrom;
 use std::rc::Rc;
@@ -141,4 +143,62 @@ pub fn apply_fn(args: &[MalObject], env: &Rc<Environment>) -> Result {
         parent: env.clone(),
     };
     Ok(MalObject::Closure(Rc::new(closure)))
+}
+
+fn extract_list(obj: &MalObject) -> Option<Rc<Vec<MalObject>>> {
+    match obj {
+        MalObject::List(contents) => Some(contents.clone()),
+        _ => None,
+    }
+}
+
+pub(crate) fn apply_quasiquote(ast: &MalObject) -> std::result::Result<MalObject, BadArgCount> {
+    match extract_list(ast) {
+        None => Ok(MalObject::wrap_list(vec![
+            MalObject::new_symbol("quote"),
+            ast.clone(),
+        ])),
+        Some(ast) => quasiquote_internal(ast.as_slice()),
+    }
+}
+
+fn quasiquote_internal(ast: &[MalObject]) -> std::result::Result<MalObject, BadArgCount> {
+    if ast.is_empty() {
+        return Ok(MalObject::new_list());
+    }
+    log::debug!(
+        "quasiquote_internal, ast={}",
+        printer::pr_str(
+            &MalObject::wrap_list(ast.to_vec()),
+            printer::PrintMode::ReadableRepresentation
+        )
+    );
+    Arity::at_least(1).validate_for(ast.len(), "quasiquote argument")?;
+    let unquote: MalObject = MalObject::new_symbol("unquote");
+    if ast[0] == unquote {
+        Arity::exactly(2).validate_for(ast.len(), "unquote")?;
+        return Ok(ast[1].clone());
+    }
+
+    let splice_unquote: MalObject = MalObject::new_symbol("splice-unquote");
+    let ast_0_list = extract_list(&ast[0]).filter(|ast0| ast0.len() >= 1);
+    match ast_0_list {
+        Some(ast_0_list) if ast_0_list[0] == splice_unquote => {
+            Arity::at_least(1).validate_for(ast_0_list[1..].len(), "splice-unquote argument")?;
+            let mut vec = Vec::new();
+            vec.push(MalObject::new_symbol("concat"));
+            vec.push(ast_0_list[1].clone());
+            // TODO: can we avoid the recursion?
+            vec.push(quasiquote_internal(&ast[1..])?);
+            Ok(MalObject::wrap_list(vec))
+        }
+        _ => {
+            let mut vec = Vec::new();
+            vec.push(MalObject::new_symbol("cons"));
+            // TODO: can we avoid the recursion?
+            vec.push(apply_quasiquote(&ast[0])?);
+            vec.push(quasiquote_internal(&ast[1..])?);
+            Ok(MalObject::wrap_list(vec))
+        }
+    }
 }

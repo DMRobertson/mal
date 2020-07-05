@@ -77,6 +77,22 @@ pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
                             }
                             "fn*" => return special_forms::apply_fn(&argv[1..], &env),
                             // Any other initial symbol will be interpreted a a function call and handled below
+                            "quote" => {
+                                Arity::exactly(1)
+                                    .validate_for(argv[1..].len(), "quote")
+                                    .map_err(Error::BadArgCount)?;
+                                return Ok(argv[1].clone());
+                            }
+                            "quasiquote" => {
+                                Arity::exactly(1)
+                                    .validate_for(argv[1..].len(), "quote")
+                                    .map_err(Error::BadArgCount)?;
+                                ast = Cow::Owned(
+                                    special_forms::apply_quasiquote(&argv[1])
+                                        .map_err(Error::BadArgCount)?,
+                                );
+                                continue;
+                            }
                             _ => (),
                         };
                     };
