@@ -1,9 +1,7 @@
 use crate::strings::BuildError;
 use crate::tokens;
 use crate::tokens::{tokenize, Close, Token, TokenizerError};
-use crate::types::{
-    build_keyword, build_map, build_string, build_symbol, MalInt, MalList, MalObject, MapError,
-};
+use crate::types::{build_keyword, build_map, build_string, MalInt, MalList, MalObject, MapError};
 use std::iter::Peekable;
 use std::rc::Rc;
 use std::{fmt, slice};
@@ -131,7 +129,7 @@ fn read_plain_chars(chars: &str) -> Result {
     match first {
         '+' | '-' => match iter.next() {
             Some(c) if ascii_digit(c) => read_int(chars),
-            _ => Ok(build_symbol(chars)),
+            _ => Ok(MalObject::new_symbol(chars)),
         },
         c if ascii_digit(c) => read_int(chars),
         ':' => Ok(build_keyword(&chars[1..])),
@@ -139,7 +137,7 @@ fn read_plain_chars(chars: &str) -> Result {
             "true" => Ok(MalObject::Bool(true)),
             "false" => Ok(MalObject::Bool(false)),
             "nil" => Ok(MalObject::Nil),
-            _ => Ok(build_symbol(chars)),
+            _ => Ok(MalObject::new_symbol(chars)),
         },
     }
 }
@@ -159,14 +157,14 @@ fn read_int(chars: &str) -> Result {
 
 fn read_unary_operand(reader: &mut Reader, opname: &str) -> Result {
     let mut list = MalList::new();
-    list.push(build_symbol(opname));
+    list.push(MalObject::new_symbol(opname));
     list.push(read_form(reader)?);
     Ok(MalObject::List(Rc::new(list)))
 }
 
 fn read_with_meta(reader: &mut Reader) -> Result {
     let mut list = MalList::new();
-    list.push(build_symbol("with-meta"));
+    list.push(MalObject::new_symbol("with-meta"));
     let first = read_form(reader)?;
     let second = read_form(reader)?;
     list.push(second);

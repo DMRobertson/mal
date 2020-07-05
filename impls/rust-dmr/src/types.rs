@@ -329,10 +329,6 @@ pub(crate) fn build_map(entries: MalVector) -> Result<MalObject, MapError> {
     Ok(MalObject::Map(Rc::new(map)))
 }
 
-pub(crate) fn build_symbol(chars: &str) -> MalObject {
-    MalObject::Symbol(MalSymbol::from(chars))
-}
-
 pub(crate) fn build_keyword(chars: &str) -> MalObject {
     MalObject::Keyword(String::from(chars))
 }
@@ -353,5 +349,8 @@ impl MalObject {
     }
     pub(crate) fn wrap_vector(elements: Vec<MalObject>) -> Self {
         Self::Vector(Rc::new(elements))
+    }
+    pub(crate) fn new_symbol(name: &str) -> Self {
+        Self::Symbol(MalSymbol::from(name))
     }
 }

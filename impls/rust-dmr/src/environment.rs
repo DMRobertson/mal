@@ -57,12 +57,7 @@ impl Environment {
     pub fn default() -> Self {
         let mut data = HashMap::new();
         for (&name, &func) in core::CORE.iter() {
-            data.insert(
-                MalSymbol {
-                    name: name.to_string(),
-                },
-                MalObject::Primitive(func),
-            );
+            data.insert(MalSymbol::from(name), MalObject::Primitive(func));
         }
         Self {
             data: RefCell::new(data),
@@ -92,10 +87,5 @@ pub fn add_eval(env: &Rc<Environment>) {
     let dummy = MalObject::Eval(PrimitiveEval {
         env: Rc::downgrade(env),
     });
-    env.set(
-        MalSymbol {
-            name: "eval".to_string(),
-        },
-        dummy,
-    );
+    env.set(MalSymbol::from("eval"), dummy);
 }

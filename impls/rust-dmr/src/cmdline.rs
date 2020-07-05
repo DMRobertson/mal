@@ -133,20 +133,13 @@ pub fn launch(mut args: Vec<String>, env: &Rc<Environment>) -> Result<(), Error>
             .map(|s| MalObject::String(s))
             .collect(),
     );
-    env.set(
-        MalSymbol {
-            name: "*ARGV*".to_string(),
-        },
-        script_args,
-    );
+    env.set(MalSymbol::from("*ARGV*"), script_args);
 
     match mode {
         Mode::Repl => run(|line| interpreter::rep(line, &env)).map_err(Error::IO),
         Mode::Batch(path) => {
             let cmd: MalList = vec![
-                MalObject::Symbol(MalSymbol {
-                    name: "load-file".to_string(),
-                }),
+                MalObject::new_symbol("load-file"),
                 MalObject::String(path.to_string()),
             ];
             log::debug!("Batch mode, run cmd {:?}", cmd);
