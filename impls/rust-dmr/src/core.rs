@@ -319,9 +319,7 @@ const CONS: PrimitiveFn = PrimitiveFn {
 };
 fn cons_(args: &[MalObject]) -> evaluator::Result {
     match args {
-        [head, MalObject::List(tail)]
-        //| [head, MalObject::Vector(tail)]
-         => {
+        [head, MalObject::List(tail)] | [head, MalObject::Vector(tail)] => {
             let mut elements = Vec::new();
             elements.push(head.clone());
             elements.extend(tail.iter().map(MalObject::clone));

@@ -147,7 +147,7 @@ pub fn apply_fn(args: &[MalObject], env: &Rc<Environment>) -> Result {
 
 fn extract_list(obj: &MalObject) -> Option<Rc<Vec<MalObject>>> {
     match obj {
-        MalObject::List(contents) => Some(contents.clone()),
+        MalObject::List(contents) | MalObject::Vector(contents) => Some(contents.clone()),
         _ => None,
     }
 }
