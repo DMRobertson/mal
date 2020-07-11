@@ -115,9 +115,9 @@ pub enum Error {
     RepError(String),
 }
 
-fn process_argv(args: &Vec<String>) -> Mode {
+fn process_argv(args: &[String]) -> Mode {
     log::debug!("Batch mode, args={:?}", args);
-    match args.as_slice() {
+    match args {
         [] | [_] => Mode::Repl,
         [_program_name, file_path, ..] => Mode::Batch(file_path.clone()),
     }
@@ -127,12 +127,8 @@ pub fn launch(mut args: Vec<String>, env: &Rc<Environment>) -> Result<(), Error>
     let mode = process_argv(&args);
 
     let script_args = args.split_off(min(args.len(), 2));
-    let script_args = MalObject::wrap_list(
-        script_args
-            .into_iter()
-            .map(|s| MalObject::String(s))
-            .collect(),
-    );
+    let script_args =
+        MalObject::wrap_list(script_args.into_iter().map(MalObject::String).collect());
     env.set(MalSymbol("*ARGV*".into()), script_args);
 
     match mode {
@@ -140,7 +136,7 @@ pub fn launch(mut args: Vec<String>, env: &Rc<Environment>) -> Result<(), Error>
         Mode::Batch(path) => {
             let cmd = MalObject::wrap_list(vec![
                 MalObject::new_symbol("load-file"),
-                MalObject::String(path.to_string()),
+                MalObject::String(path),
             ]);
             log::debug!("Batch mode, run cmd {}", cmd);
             match EVAL(&cmd, &env) {

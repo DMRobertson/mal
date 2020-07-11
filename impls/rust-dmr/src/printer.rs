@@ -85,7 +85,7 @@ fn write_sequence(f: &mut impl fmt::Write, seq: &[MalObject], mode: PrintMode) -
     let mut iter = seq.iter().peekable();
     while let Some(obj) = iter.next() {
         write!(f, "{}", pr_str(obj, mode))?;
-        if let Some(_) = iter.peek() {
+        if iter.peek().is_some() {
             write!(f, " ")?;
         }
     }
@@ -122,7 +122,7 @@ impl fmt::Display for types::MalMap {
                 HashKey::Keyword(s) => write!(f, ":{}", s),
             }?;
             write!(f, " {}", value)?;
-            if let Some(_) = iter.peek() {
+            if iter.peek().is_some() {
                 write!(f, " ")?;
             };
         }

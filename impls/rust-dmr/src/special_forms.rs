@@ -178,7 +178,7 @@ fn quasiquote_internal(ast: &[MalObject]) -> std::result::Result<MalObject, BadA
     }
 
     let splice_unquote: MalObject = MalObject::new_symbol("splice-unquote");
-    let ast_0_list = ast[0].as_seq().ok().filter(|ast0| ast0.len() >= 1);
+    let ast_0_list = ast[0].as_seq().ok().filter(|ast0| !ast0.is_empty());
     match ast_0_list {
         Some(ast_0_list) if ast_0_list[0] == splice_unquote => {
             Arity::at_least(1).validate_for(ast_0_list[1..].len(), "splice-unquote argument")?;

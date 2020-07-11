@@ -90,7 +90,7 @@ impl Environment {
             Some(parent) => {
                 // TODO nonrecursive?
                 writeln!(f, "whose parent (depth {}) contains:", depth)?;
-                return parent.fmt_internal(f, depth + 1);
+                parent.fmt_internal(f, depth + 1)
             }
         }
     }
@@ -111,7 +111,7 @@ pub fn read_prelude(env: &Rc<Environment>) -> Result<(), String> {
     let result: Result<Vec<_>, _> = prelude::PRELUDE
         .lines()
         .map(str::trim)
-        .filter(|s| s.len() > 0)
+        .filter(|s| !s.is_empty())
         .map(|s| interpreter::rep(s, env))
         .collect();
     result.map(|_| ())

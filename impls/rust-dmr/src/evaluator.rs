@@ -145,7 +145,7 @@ pub(crate) enum ApplyOutcome {
 pub(crate) fn apply(callable: &MalObject, args: &[MalObject]) -> Result<ApplyOutcome> {
     use MalObject::{Closure, Eval, Primitive};
     match callable {
-        Primitive(f) => return call_primitive(f, args).map(ApplyOutcome::Finished),
+        Primitive(f) => call_primitive(f, args).map(ApplyOutcome::Finished),
         Closure(f) => {
             let ast = f.body.clone();
             let env = make_closure_env(f, args)?;
@@ -216,8 +216,7 @@ fn make_closure_env(func: &Closure, args: &[MalObject]) -> Result<Rc<Environment
         env.set(key.clone(), value.clone());
     }
     if let Some(rest_key) = &func.parameters.others {
-        let rest = rest.iter().map(|obj| obj.clone()).collect();
-        env.set(rest_key.clone(), MalObject::wrap_list(rest));
+        env.set(rest_key.clone(), MalObject::wrap_list(rest.to_vec()));
     }
     Ok(env)
 }
@@ -256,5 +255,5 @@ fn macroexpand(ast: &MalObject, env: &Rc<Environment>) -> Result {
             }
         }
     }
-    Ok(ast.to_owned())
+    Ok(ast)
 }
