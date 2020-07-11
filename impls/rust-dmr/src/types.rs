@@ -318,6 +318,13 @@ impl MalObject {
             _ => Err(TypeMismatch::NotAClosure),
         }
     }
+
+    pub(crate) fn is_nil(&self) -> bool {
+        match self {
+            MalObject::Nil => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]

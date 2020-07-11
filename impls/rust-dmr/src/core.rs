@@ -3,7 +3,7 @@ use crate::types::{callable, Arity, Atom, MalInt, MalObject, PrimitiveFn, TypeMi
 use crate::{evaluator, printer, reader, types};
 use itertools::Itertools;
 use std::collections::HashMap;
-use std::convert::{TryFrom};
+use std::convert::TryFrom;
 use std::fs::read_to_string;
 
 fn grab_ints(args: &[MalObject]) -> evaluator::Result<Vec<MalInt>> {
@@ -354,7 +354,10 @@ const NTH: PrimitiveFn = PrimitiveFn {
 fn nth_(args: &[MalObject]) -> evaluator::Result {
     let seq = args[0].as_seq().map_err(evaluator::Error::TypeMismatch)?;
     let orig_index = args[1].as_int().map_err(evaluator::Error::TypeMismatch)?;
+    nth_internal(seq, orig_index)
+}
 
+fn nth_internal(seq: &[MalObject], orig_index: isize) -> evaluator::Result {
     let index = usize::try_from(orig_index).ok();
     let value = index
         .map(|index| seq.get(index))
@@ -362,6 +365,22 @@ fn nth_(args: &[MalObject]) -> evaluator::Result {
         .map(MalObject::clone);
 
     value.ok_or_else(|| evaluator::Error::BadIndex(orig_index, 0..seq.len()))
+}
+
+const FIRST: PrimitiveFn = PrimitiveFn {
+    name: "first",
+    fn_ptr: first_,
+    arity: Arity::exactly(1),
+};
+fn first_(args: &[MalObject]) -> evaluator::Result {
+    if args[0].is_nil() {
+        return Ok(MalObject::Nil);
+    }
+    let seq = args[0].as_seq().map_err(evaluator::Error::TypeMismatch)?;
+    match seq.is_empty() {
+        true => Ok(MalObject::Nil),
+        false => nth_internal(seq, 0),
+    }
 }
 
 type Namespace = HashMap<&'static str, &'static PrimitiveFn>;
@@ -396,6 +415,7 @@ lazy_static! {
             CONS,
             CONCAT,
             NTH,
+            FIRST,
         ] {
             map.insert(func.name, func);
         }
