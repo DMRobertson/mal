@@ -383,6 +383,24 @@ fn first_(args: &[MalObject]) -> evaluator::Result {
     }
 }
 
+const REST: PrimitiveFn = PrimitiveFn {
+    name: "rest",
+    fn_ptr: rest_,
+    arity: Arity::exactly(1),
+};
+fn rest_(args: &[MalObject]) -> evaluator::Result {
+    if args[0].is_nil() {
+        return Ok(MalObject::new_list());
+    }
+    let seq = args[0].as_seq().map_err(evaluator::Error::TypeMismatch)?;
+    if seq.is_empty() {
+        return Ok(MalObject::new_list());
+    }
+    // Feels a shame to make the copy here. Maybe we could have a MalObject::ListSlice which appears like a list to the outside world, but internally is a view into an list owned elsewhere?
+    let copied = seq[1..].iter().map(MalObject::clone).collect();
+    Ok(MalObject::wrap_list(copied))
+}
+
 type Namespace = HashMap<&'static str, &'static PrimitiveFn>;
 lazy_static! {
     pub static ref CORE: Namespace = {
@@ -416,6 +434,7 @@ lazy_static! {
             CONCAT,
             NTH,
             FIRST,
+            REST,
         ] {
             map.insert(func.name, func);
         }
