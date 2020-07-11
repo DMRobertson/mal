@@ -54,6 +54,18 @@ fn print_as_string(payload: &str, mode: PrintMode) -> String {
     }
 }
 
+impl fmt::Display for Closure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "({} ({}) {})",
+            match self.is_macro {
+                true => "fn*-macro",
+                false => "fn*",
+            },
+            self.parameters,
+            self.body,
+        )
     }
 }
 

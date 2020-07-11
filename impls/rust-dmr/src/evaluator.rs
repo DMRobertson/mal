@@ -53,14 +53,17 @@ pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
     let mut ast = orig_ast.clone();
     let mut env = orig_env.clone();
     loop {
-        match &*ast {
+        ast = macroexpand(&ast, &env)?;
+        log::debug!("macroexpand produced {}", ast);
+        match &ast {
             List(argv) => match argv.len() {
                 0 => return Ok(MalObject::new_list()),
                 _ => {
                     log::debug!("apply {}", argv);
                     if let Symbol(name) = &argv[0] {
                         match name.as_str() {
-                            "def!" => return special_forms::apply_def(&argv[1..], &env),
+                            "def!" => return special_forms::apply_def(&argv[1..], &env, false),
+                            "defmacro!" => return special_forms::apply_def(&argv[1..], &env, true),
                             "let*" => {
                                 let (new_ast, new_env) =
                                     special_forms::apply_let(&argv[1..], &env)?;
@@ -91,6 +94,12 @@ pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
                                 ast = special_forms::apply_quasiquote(&argv[1])
                                     .map_err(Error::BadArgCount)?;
                                 continue;
+                            }
+                            "macroexpand" => {
+                                Arity::exactly(1)
+                                    .validate_for(argv[1..].len(), "macroexpand")
+                                    .map_err(Error::BadArgCount)?;
+                                return macroexpand(&argv[1], &env);
                             }
                             _ => (),
                         };
@@ -202,4 +211,41 @@ fn make_closure_env(func: &Closure, args: &[MalObject]) -> Result<Rc<Environment
         env.set(rest_key.clone(), MalObject::wrap_list(rest));
     }
     Ok(env)
+}
+
+fn is_macro_call<'a>(ast: &'a MalObject, env: &Environment) -> Option<&'a MalSymbol> {
+    let symbol = ast
+        .as_list()
+        .ok()
+        .filter(|seq| !seq.is_empty())
+        .map(|seq| seq[0].as_symbol().ok())
+        .flatten();
+    let value = symbol.map(|sym| env.get(sym)).flatten();
+    let is_macro = value
+        .map(|obj| obj.as_closure().ok().map(|c| c.is_macro))
+        .flatten()
+        .unwrap_or(false);
+    match is_macro {
+        true => Some(symbol.unwrap()),
+        false => None,
+    }
+}
+
+fn macroexpand(ast: &MalObject, env: &Rc<Environment>) -> Result {
+    let mut ast = ast.clone();
+    let mut env = env.clone();
+    while let Some(symbol) = is_macro_call(&ast, &env) {
+        log::debug!("macroexpand: env={}", env);
+        let closure = env.get(symbol).unwrap();
+        match apply(&closure, &ast.as_list().unwrap()[1..])? {
+            ApplyOutcome::Finished(obj) => ast = obj,
+            EvaluateFurther(next_ast, next_env) => {
+                log::debug!("macroexpand: next_ast={}", next_ast);
+                ast = next_ast;
+                env = next_env;
+                ast = EVAL(&ast, &env)?;
+            }
+        }
+    }
+    Ok(ast.to_owned())
 }

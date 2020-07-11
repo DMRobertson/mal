@@ -120,7 +120,7 @@ impl fmt::Debug for PrimitiveEval {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ClosureParameters {
     pub positional: Vec<MalSymbol>,
     pub others: Option<MalSymbol>,
@@ -182,10 +182,12 @@ impl ClosureParameters {
     }
 }
 
+#[derive(Clone)]
 pub struct Closure {
     pub parameters: ClosureParameters,
     pub body: MalObject,
     pub parent: Rc<Environment>,
+    pub is_macro: bool,
 }
 
 impl fmt::Debug for Closure {
@@ -193,8 +195,8 @@ impl fmt::Debug for Closure {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Closure{{parameters: {:?}, body: {:?}}}",
-            self.parameters, self.body
+            "Closure{{parameters: {:?}, body: {:?}, is_macro: {:?}}}",
+            self.parameters, self.body, self.is_macro
         )
     }
 }
@@ -277,6 +279,7 @@ pub enum TypeMismatch {
     NotAString,
     NotAnAtom,
     NotCallable,
+    NotAClosure,
 }
 
 impl MalObject {
@@ -309,6 +312,12 @@ impl MalObject {
         }
     }
 
+    pub(crate) fn as_closure(&self) -> Result<&Closure, TypeMismatch> {
+        match self {
+            MalObject::Closure(c) => Ok(c),
+            _ => Err(TypeMismatch::NotAClosure),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]

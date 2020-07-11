@@ -1,6 +1,6 @@
 use crate::types::{
-    truthy, Arity, BadArgCount, BadClosureParameters, Closure, ClosureParameters, MalList,
-    MalObject, MalSymbol,
+    truthy, Arity, BadArgCount, BadClosureParameters, Closure, ClosureParameters, MalObject,
+    MalSymbol, TypeMismatch,
 };
 use itertools::Itertools;
 
@@ -15,7 +15,7 @@ pub enum DefError {
     KeyNotASymbol,
 }
 
-pub fn apply_def(args: &[MalObject], env: &Rc<Environment>) -> Result {
+pub fn apply_def(args: &[MalObject], env: &Rc<Environment>, make_macro: bool) -> Result {
     let (key, value) = match args.len() {
         2 => Ok((&args[0], &args[1])),
         n => Err(Error::Def(DefError::WrongArgCount(n))),
@@ -25,6 +25,17 @@ pub fn apply_def(args: &[MalObject], env: &Rc<Environment>) -> Result {
         _ => Err(Error::Def(DefError::KeyNotASymbol)),
     }?;
     let value = EVAL(value, env)?;
+    let value = match make_macro {
+        true => match value {
+            MalObject::Closure(c) => {
+                let mut tweaked_closure = (*c).clone();
+                tweaked_closure.is_macro = true;
+                Ok(MalObject::Closure(Rc::new(tweaked_closure)))
+            }
+            _ => Err(Error::TypeMismatch(TypeMismatch::NotAClosure)),
+        }?,
+        false => value,
+    };
     env.set(key.clone(), value.clone());
     // Shouldn't this return a reference to the object in the map?
     Ok(value)
@@ -139,6 +150,7 @@ pub fn apply_fn(args: &[MalObject], env: &Rc<Environment>) -> Result {
         parameters: ClosureParameters::new(parameters).map_err(|e| Error::Fn(BadVariadic(e)))?,
         body: body.clone(),
         parent: env.clone(),
+        is_macro: false,
     };
     Ok(MalObject::Closure(Rc::new(closure)))
 }
