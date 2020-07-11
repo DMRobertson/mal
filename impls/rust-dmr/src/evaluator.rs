@@ -85,7 +85,8 @@ pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
                                 continue;
                             }
                             "fn*" => return special_forms::apply_fn(&argv[1..], &env),
-                            // Any other initial symbol will be interpreted a a function call and handled below
+                            // Any other initial symbol will be interpreted a a function call and
+                            // handled below
                             "quote" => {
                                 Arity::exactly(1)
                                     .validate_for(argv[1..].len(), "quote")
@@ -127,12 +128,15 @@ pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
 }
 
 // Want to pull out the apply logic so we can use it in core::SWAP.
-// We still want to allow EVAL above to use TCO, so we might return EvaluateFurther from apply in order to continue the EVAL loop.
-// But this now means we might have to process EvaluateFuther in core::SWAP with a call to EVAL.
+// We still want to allow EVAL above to use TCO, so we might return
+// EvaluateFurther from apply in order to continue the EVAL loop. But this now
+// means we might have to process EvaluateFuther in core::SWAP with a call to
+// EVAL.
 
 // Feels complex---maybe a premature optimisation?
 // Depends how often closures need to EvaluateFurther.
-// I'd imagine the point of lisp is that you want closures that can return calls to other closures, so fairly often?
+// I'd imagine the point of lisp is that you want closures that can return calls
+// to other closures, so fairly often?
 pub(crate) enum ApplyOutcome {
     Finished(MalObject),
     EvaluateFurther(MalObject, Rc<Environment>),

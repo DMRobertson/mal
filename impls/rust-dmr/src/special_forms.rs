@@ -128,8 +128,9 @@ pub enum FnError {
 
 pub fn apply_fn(args: &[MalObject], env: &Rc<Environment>) -> Result {
     // Start by checking that we've been given the right kind of arguments.
-    // We expect exactly two arguments. The first, a parameters list, should be a sequence of symbols.
-    // The second, the expression body of the function we're defining, is any MalObject.
+    // We expect exactly two arguments. The first, a parameters list, should be a
+    // sequence of symbols. The second, the expression body of the function
+    // we're defining, is any MalObject.
     let (parameters, body) = match args.len() {
         2 => Ok((&args[0], &args[1])),
         n => Err(Error::Fn(FnError::WrongArgCount(n))),

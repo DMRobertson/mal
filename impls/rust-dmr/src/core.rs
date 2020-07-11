@@ -396,7 +396,9 @@ fn rest_(args: &[MalObject]) -> evaluator::Result {
     if seq.is_empty() {
         return Ok(MalObject::new_list());
     }
-    // Feels a shame to make the copy here. Maybe we could have a MalObject::ListSlice which appears like a list to the outside world, but internally is a view into an list owned elsewhere?
+    // Feels a shame to make the copy here. Maybe we could have a
+    // MalObject::ListSlice which appears like a list to the outside world, but
+    // internally is a view into an list owned elsewhere?
     let copied = seq[1..].iter().map(MalObject::clone).collect();
     Ok(MalObject::wrap_list(copied))
 }
