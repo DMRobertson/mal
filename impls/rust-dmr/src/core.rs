@@ -3,6 +3,7 @@ use crate::types::{callable, Arity, Atom, MalInt, MalObject, PrimitiveFn, TypeMi
 use crate::{evaluator, printer, reader, types};
 use itertools::Itertools;
 use std::collections::HashMap;
+use std::convert::{TryFrom};
 use std::fs::read_to_string;
 
 fn grab_ints(args: &[MalObject]) -> evaluator::Result<Vec<MalInt>> {
@@ -345,6 +346,24 @@ fn concat_(args: &[MalObject]) -> evaluator::Result {
     Ok(MalObject::wrap_list(output))
 }
 
+const NTH: PrimitiveFn = PrimitiveFn {
+    name: "nth",
+    fn_ptr: nth_,
+    arity: Arity::exactly(2),
+};
+fn nth_(args: &[MalObject]) -> evaluator::Result {
+    let seq = args[0].as_seq().map_err(evaluator::Error::TypeMismatch)?;
+    let orig_index = args[1].as_int().map_err(evaluator::Error::TypeMismatch)?;
+
+    let index = usize::try_from(orig_index).ok();
+    let value = index
+        .map(|index| seq.get(index))
+        .flatten()
+        .map(MalObject::clone);
+
+    value.ok_or_else(|| evaluator::Error::BadIndex(orig_index, 0..seq.len()))
+}
+
 type Namespace = HashMap<&'static str, &'static PrimitiveFn>;
 lazy_static! {
     pub static ref CORE: Namespace = {
@@ -376,6 +395,7 @@ lazy_static! {
             SWAP,
             CONS,
             CONCAT,
+            NTH,
         ] {
             map.insert(func.name, func);
         }

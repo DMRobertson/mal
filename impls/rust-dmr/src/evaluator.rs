@@ -5,6 +5,7 @@ use crate::{environment, reader, special_forms, types};
 
 use std::collections::HashMap;
 use std::fmt;
+use std::ops::Range;
 use std::rc::Rc;
 
 pub type Result<T = MalObject> = std::result::Result<T, Error>;
@@ -18,6 +19,7 @@ pub enum Error {
     Fn(special_forms::FnError),
     TypeMismatch(types::TypeMismatch),
     BadArgCount(types::BadArgCount),
+    BadIndex(isize, Range<usize>),
     DivideByZero,
     // TODO the arrangement of all these errors needs a rethink IMO!
     ReadError(reader::Error),
@@ -41,6 +43,9 @@ impl fmt::Display for Error {
             Error::DivideByZero => write!(f, "cannot divide by zero!"),
             Error::ReadError(e) => write!(f, "read error: {}", e),
             Error::IOError(e) => write!(f, "io error: {}", e),
+            Error::BadIndex(i, r) => {
+                write!(f, "bad index: {} not in range [{}, {})", i, r.start, r.end)
+            }
         }
     }
 }
