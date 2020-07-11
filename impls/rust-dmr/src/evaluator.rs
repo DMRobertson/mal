@@ -50,8 +50,8 @@ pub(crate) type EvalContext = (MalObject, Rc<Environment>);
 #[allow(non_snake_case)]
 pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
     use MalObject::{List, Symbol};
-    let mut ast = Cow::Borrowed(orig_ast);
-    let mut env = Cow::Borrowed(orig_env);
+    let mut ast = orig_ast.clone();
+    let mut env = orig_env.clone();
     loop {
         match &*ast {
             List(argv) => match argv.len() {
@@ -64,16 +64,16 @@ pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
                             "let*" => {
                                 let (new_ast, new_env) =
                                     special_forms::apply_let(&argv[1..], &env)?;
-                                env = Cow::Owned(new_env);
-                                ast = Cow::Owned(new_ast);
+                                env = new_env;
+                                ast = new_ast;
                                 continue;
                             }
                             "do" => {
-                                ast = Cow::Owned(special_forms::apply_do(&argv[1..], &env)?);
+                                ast = special_forms::apply_do(&argv[1..], &env)?;
                                 continue;
                             }
                             "if" => {
-                                ast = Cow::Owned(special_forms::apply_if(&argv[1..], &env)?);
+                                ast = special_forms::apply_if(&argv[1..], &env)?;
                                 continue;
                             }
                             "fn*" => return special_forms::apply_fn(&argv[1..], &env),
@@ -86,12 +86,10 @@ pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
                             }
                             "quasiquote" => {
                                 Arity::exactly(1)
-                                    .validate_for(argv[1..].len(), "quote")
+                                    .validate_for(argv[1..].len(), "quasiquote")
                                     .map_err(Error::BadArgCount)?;
-                                ast = Cow::Owned(
-                                    special_forms::apply_quasiquote(&argv[1])
-                                        .map_err(Error::BadArgCount)?,
-                                );
+                                ast = special_forms::apply_quasiquote(&argv[1])
+                                    .map_err(Error::BadArgCount)?;
                                 continue;
                             }
                             _ => (),
@@ -102,8 +100,8 @@ pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
                     match apply(callable, args)? {
                         ApplyOutcome::Finished(obj) => return Ok(obj),
                         ApplyOutcome::EvaluateFurther(next_ast, next_env) => {
-                            ast = Cow::Owned(next_ast);
-                            env = Cow::Owned(next_env);
+                            ast = next_ast;
+                            env = next_env;
                             continue;
                         }
                     }
