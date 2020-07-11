@@ -1,6 +1,6 @@
-use crate::types::{Closure, HashKey, MalMap, MalObject};
-use crate::{interpreter, reader, strings};
-use itertools::Itertools;
+use crate::types::{Closure, HashKey, MalObject};
+use crate::{interpreter, reader, strings, types};
+use std::fmt;
 
 pub enum Outcome {
     String(String),
@@ -11,7 +11,6 @@ pub type Result = std::result::Result<Outcome, String>;
 pub fn print(result: &interpreter::Result) -> Result {
     use interpreter::Error::*;
     use reader::Error::*;
-    log::debug!("print {:?}", result);
     match result {
         Ok(obj) => Ok(Outcome::String(pr_str(
             &obj,
@@ -29,29 +28,23 @@ pub enum PrintMode {
     Directly,
 }
 
-// More idiomatic to impl Display for MalObject?
 pub(crate) fn pr_str(object: &MalObject, mode: PrintMode) -> String {
     match object {
-        // TODO not sure that passing the mode through here is the right choice.
-        // Think we ought to distinguish ala Python between str() and repr().
-        MalObject::List(elements) => format!("({})", print_sequence_contents(elements, mode)),
-        MalObject::Vector(elements) => format!("[{}]", print_sequence_contents(elements, mode)),
-        MalObject::Map(map) => format!("{{{}}}", print_map_contents(map)),
-        MalObject::Integer(value) => value.to_string(),
-        MalObject::Symbol(s) => s.name.clone(),
-        MalObject::Nil => String::from("nil"),
         MalObject::String(payload) => print_as_string(payload, mode),
-        MalObject::Keyword(payload) => print_as_keyword(payload),
-        MalObject::Bool(payload) => String::from(if *payload { "true" } else { "false" }),
-        MalObject::Primitive(f) => format!("{:?}", f),
-        MalObject::Closure(f) => print_closure(f),
-        MalObject::Eval(e) => format!("{:?}", e),
-        MalObject::Atom(atom) => format!("(atom {})", pr_str(&*atom.borrow_payload(), mode)),
+        MalObject::List(x) => {
+            let mut output: String = "(".into();
+            write_sequence(&mut output, x, mode).unwrap();
+            output.push(')');
+            output
+        }
+        MalObject::Vector(x) => {
+            let mut output: String = "[".into();
+            write_sequence(&mut output, x, mode).unwrap();
+            output.push(']');
+            output
+        }
+        _ => format!("{}", object),
     }
-}
-
-fn print_sequence_contents(seq: &[MalObject], mode: PrintMode) -> String {
-    seq.iter().map(|x| pr_str(x, mode)).join(" ")
 }
 
 fn print_as_string(payload: &str, mode: PrintMode) -> String {
@@ -61,30 +54,88 @@ fn print_as_string(payload: &str, mode: PrintMode) -> String {
     }
 }
 
-fn print_as_keyword(payload: &str) -> String {
-    format!(":{}", payload)
-}
-
-fn print_map_contents(map: &MalMap) -> String {
-    let mut output = String::new();
-    for (key, value) in map.iter() {
-        output.push_str(&match key {
-            HashKey::String(s) => print_as_string(&s, PrintMode::ReadableRepresentation),
-            HashKey::Keyword(s) => print_as_keyword(&s),
-        });
-        output.push(' ');
-        output.push_str(&pr_str(&value, PrintMode::ReadableRepresentation));
-        output.push(' ');
     }
-    // Remove last space
-    output.pop();
-    output
 }
 
-fn print_closure(f: &Closure) -> String {
-    format!(
-        "(fn* ({}) {})",
-        f.parameters,
-        pr_str(&f.body, PrintMode::ReadableRepresentation)
-    )
+impl fmt::Display for types::Atom {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "(atom {})", self.borrow_payload())
+    }
+}
+
+impl fmt::Display for types::MalSymbol {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+fn write_sequence(f: &mut impl fmt::Write, seq: &[MalObject], mode: PrintMode) -> fmt::Result {
+    let mut iter = seq.iter().peekable();
+    while let Some(obj) = iter.next() {
+        write!(f, "{}", pr_str(obj, mode))?;
+        if let Some(_) = iter.peek() {
+            write!(f, " ")?;
+        }
+    }
+    Ok(())
+}
+
+impl fmt::Display for types::MalList {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "(")
+            .and_then(|_| write_sequence(f, self, PrintMode::ReadableRepresentation))
+            .and_then(|_| write!(f, ")"))
+    }
+}
+
+impl fmt::Display for types::MalVector {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[")
+            .and_then(|_| write_sequence(f, self, PrintMode::ReadableRepresentation))
+            .and_then(|_| write!(f, "]"))
+    }
+}
+
+impl fmt::Display for types::MalMap {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{{")?;
+        let mut iter = self.iter().peekable();
+        while let Some((key, value)) = iter.next() {
+            match key {
+                HashKey::String(s) => write!(
+                    f,
+                    "{}",
+                    print_as_string(&s, PrintMode::ReadableRepresentation)
+                ),
+                HashKey::Keyword(s) => write!(f, ":{}", s),
+            }?;
+            write!(f, " {}", value)?;
+            if let Some(_) = iter.peek() {
+                write!(f, " ")?;
+            };
+        }
+        write!(f, "}}")?;
+        Ok(())
+    }
+}
+
+impl fmt::Display for MalObject {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use MalObject::*;
+        match self {
+            Nil => write!(f, "nil"),
+            Integer(x) => write!(f, "{}", x),
+            Bool(x) => write!(f, "{}", x),
+            String(x) => write!(f, "{:?}", x),
+            Symbol(x) => write!(f, "{}", x),
+            Keyword(x) => write!(f, ":{}", x),
+            List(x) => write!(f, "{}", x),
+            Vector(x) => write!(f, "{}", x),
+            Map(x) => write!(f, "{}", x),
+            Primitive(x) => write!(f, "{}", x.name),
+            Closure(x) => write!(f, "{}", x),
+            Eval(_) => write!(f, "eval"),
+            Atom(x) => write!(f, "{}", x),
+        }
+    }
 }

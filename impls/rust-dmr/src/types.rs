@@ -189,6 +189,7 @@ pub struct Closure {
 }
 
 impl fmt::Debug for Closure {
+    // Not derived because we want to skip the parent: the parent may well contain this Closure!
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,

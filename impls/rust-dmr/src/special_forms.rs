@@ -6,9 +6,7 @@ use itertools::Itertools;
 
 use crate::environment::Environment;
 use crate::evaluator::{Error, EvalContext, Result, EVAL};
-use crate::printer;
 use crate::special_forms::FnError::{BadVariadic, ParameterNotASymbol};
-use std::convert::TryFrom;
 use std::rc::Rc;
 
 #[derive(Debug)]

@@ -2,6 +2,7 @@ use crate::types::{MalObject, MalSymbol, PrimitiveEval};
 use crate::{core, interpreter, prelude};
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt;
 use std::rc::Rc;
 
 pub struct Environment {
@@ -78,6 +79,31 @@ impl Environment {
             data: RefCell::new(HashMap::new()),
             parent: Some(parent.clone()),
         })
+    }
+
+    fn fmt_internal(&self, f: &mut fmt::Formatter<'_>, depth: usize) -> fmt::Result {
+        for (key, value) in self.data.borrow().iter() {
+            writeln!(f, "\t{} => {}", key, value)?;
+        }
+        match &self.parent {
+            None => Ok(()),
+            Some(parent) => {
+                // TODO nonrecursive?
+                writeln!(f, "whose parent (depth {}) contains:", depth)?;
+                return parent.fmt_internal(f, depth + 1);
+            }
+        }
+    }
+}
+
+impl fmt::Display for Environment {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Environment with data:")?;
+        if f.alternate() {
+            Ok(())
+        } else {
+            self.fmt_internal(f, 0)
+        }
     }
 }
 

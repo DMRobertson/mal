@@ -57,7 +57,7 @@ pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
             List(argv) => match argv.len() {
                 0 => return Ok(MalObject::new_list()),
                 _ => {
-                    log::debug!("apply {:?}", argv);
+                    log::debug!("apply {}", argv);
                     if let Symbol(name) = &argv[0] {
                         match name.as_str() {
                             "def!" => return special_forms::apply_def(&argv[1..], &env),
@@ -188,7 +188,7 @@ pub fn call_primitive(func: &'static PrimitiveFn, args: &[MalObject]) -> Result 
 }
 
 fn make_closure_env(func: &Closure, args: &[MalObject]) -> Result<Rc<Environment>> {
-    log::debug!("Call closure {:?} with {:?}", func, args);
+    log::debug!("Call closure {} with {:?}", func, args);
     func.parameters
         .arity()
         .validate_for(args.len(), "closure")

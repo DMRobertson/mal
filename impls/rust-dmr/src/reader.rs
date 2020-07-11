@@ -1,9 +1,8 @@
 use crate::strings::BuildError;
 use crate::tokens;
 use crate::tokens::{tokenize, Close, Token, TokenizerError};
-use crate::types::{build_keyword, build_map, build_string, MalInt, MalList, MalObject, MapError};
+use crate::types::{build_keyword, build_map, build_string, MalInt, MalObject, MapError};
 use std::iter::Peekable;
-use std::rc::Rc;
 use std::{fmt, slice};
 
 type Reader<'a> = Peekable<slice::Iter<'a, Token<'a>>>;
@@ -49,7 +48,9 @@ pub fn read_str(input: &str) -> Result {
     log::debug!("tokenize produced {:?}", tokens);
     let mut reader = tokens.iter().peekable();
     let result = read_form(&mut reader);
-    log::debug!("read_form produced {:?}", result);
+    if let Ok(obj) = &result {
+        log::debug!("read_form produced {}", obj);
+    }
     result
 }
 
