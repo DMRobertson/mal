@@ -42,17 +42,16 @@ pub enum LetError {
 }
 
 pub fn apply_let(args: &[MalObject], env: &Rc<Environment>) -> Result<EvalContext> {
-    use MalObject::{List, Vector};
     let (bindings, obj) = match args.len() {
         2 => Ok((&args[0], &args[1])),
         n => Err(Error::Let(LetError::WrongArgCount(n))),
     }?;
-    match bindings {
-        List(bindings) | Vector(bindings) if bindings.len() % 2 == 0 => {
-            make_let_environment(bindings, env).and_then(|child| Ok((obj.clone(), child)))
-        }
-        List(_) | Vector(_) => Err(Error::Let(LetError::BindingsOddLength)),
-        _ => Err(Error::Let(LetError::BindingsNotSequence)),
+    let bindings = bindings
+        .as_seq()
+        .or(Err(Error::Let(LetError::BindingsNotSequence)))?;
+    match bindings.len() % 2 == 0 {
+        true => make_let_environment(bindings, env).and_then(|child| Ok((obj.clone(), child))),
+        false => Err(Error::Let(LetError::BindingsOddLength)),
     }
 }
 
@@ -126,7 +125,8 @@ pub fn apply_fn(args: &[MalObject], env: &Rc<Environment>) -> Result {
         2 => Ok((&args[0], &args[1])),
         n => Err(Error::Fn(FnError::WrongArgCount(n))),
     }?;
-    let parameters = Rc::<MalList>::try_from(parameters)
+    let parameters = parameters
+        .as_seq()
         .or(Err(FnError::ParametersNotGivenAsList))
         .map_err(Error::Fn)?;
     let extract_symbol = |obj: &MalObject| match obj {
@@ -145,20 +145,13 @@ pub fn apply_fn(args: &[MalObject], env: &Rc<Environment>) -> Result {
     Ok(MalObject::Closure(Rc::new(closure)))
 }
 
-fn extract_list(obj: &MalObject) -> Option<Rc<Vec<MalObject>>> {
-    match obj {
-        MalObject::List(contents) | MalObject::Vector(contents) => Some(contents.clone()),
-        _ => None,
-    }
-}
-
 pub(crate) fn apply_quasiquote(ast: &MalObject) -> std::result::Result<MalObject, BadArgCount> {
-    match extract_list(ast) {
+    match ast.as_seq().ok() {
         None => Ok(MalObject::wrap_list(vec![
             MalObject::new_symbol("quote"),
             ast.clone(),
         ])),
-        Some(ast) => quasiquote_internal(ast.as_slice()),
+        Some(ast) => quasiquote_internal(ast),
     }
 }
 
@@ -166,13 +159,6 @@ fn quasiquote_internal(ast: &[MalObject]) -> std::result::Result<MalObject, BadA
     if ast.is_empty() {
         return Ok(MalObject::new_list());
     }
-    log::debug!(
-        "quasiquote_internal, ast={}",
-        printer::pr_str(
-            &MalObject::wrap_list(ast.to_vec()),
-            printer::PrintMode::ReadableRepresentation
-        )
-    );
     Arity::at_least(1).validate_for(ast.len(), "quasiquote argument")?;
     let unquote: MalObject = MalObject::new_symbol("unquote");
     if ast[0] == unquote {
@@ -181,7 +167,7 @@ fn quasiquote_internal(ast: &[MalObject]) -> std::result::Result<MalObject, BadA
     }
 
     let splice_unquote: MalObject = MalObject::new_symbol("splice-unquote");
-    let ast_0_list = extract_list(&ast[0]).filter(|ast0| ast0.len() >= 1);
+    let ast_0_list = ast[0].as_seq().ok().filter(|ast0| ast0.len() >= 1);
     match ast_0_list {
         Some(ast_0_list) if ast_0_list[0] == splice_unquote => {
             Arity::at_least(1).validate_for(ast_0_list[1..].len(), "splice-unquote argument")?;

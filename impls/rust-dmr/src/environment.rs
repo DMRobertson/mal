@@ -26,6 +26,9 @@ pub struct Environment {
     parent: Option<Rc<Environment>>,
 }
 
+#[derive(Debug)]
+pub struct UnknownSymbol(pub MalSymbol);
+
 impl Environment {
     pub fn set<T>(&self, key: T, value: MalObject) -> Option<MalObject>
     where
@@ -39,12 +42,17 @@ impl Environment {
     // an Option.
     pub fn get(&self, key: &MalSymbol) -> Option<MalObject> {
         match self.data.borrow().get(key) {
+            // TODO is this done correctly---we clone the value?
             Some(value) => Some(value.clone()),
             None => match &self.parent {
+                // TODO: nonrecursive?
                 Some(parent) => parent.get(key),
                 None => None,
             },
         }
+    }
+    pub(crate) fn fetch(&self, key: &MalSymbol) -> Result<MalObject, UnknownSymbol> {
+        self.get(key).ok_or_else(|| UnknownSymbol(key.clone()))
     }
 
     pub fn empty() -> Self {
@@ -57,7 +65,7 @@ impl Environment {
     pub fn default() -> Self {
         let mut data = HashMap::new();
         for (&name, &func) in core::CORE.iter() {
-            data.insert(MalSymbol::from(name), MalObject::Primitive(func));
+            data.insert(MalSymbol(name.into()), MalObject::Primitive(func));
         }
         Self {
             data: RefCell::new(data),
@@ -87,5 +95,5 @@ pub fn add_eval(env: &Rc<Environment>) {
     let dummy = MalObject::Eval(PrimitiveEval {
         env: Rc::downgrade(env),
     });
-    env.set(MalSymbol::from("eval"), dummy);
+    env.set(MalSymbol("eval".into()), dummy);
 }

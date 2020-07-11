@@ -156,18 +156,16 @@ fn read_int(chars: &str) -> Result {
 }
 
 fn read_unary_operand(reader: &mut Reader, opname: &str) -> Result {
-    let mut list = MalList::new();
-    list.push(MalObject::new_symbol(opname));
-    list.push(read_form(reader)?);
-    Ok(MalObject::List(Rc::new(list)))
+    let list = vec![MalObject::new_symbol(opname), read_form(reader)?];
+    Ok(MalObject::wrap_list(list))
 }
 
 fn read_with_meta(reader: &mut Reader) -> Result {
-    let mut list = MalList::new();
+    let mut list = Vec::new();
     list.push(MalObject::new_symbol("with-meta"));
     let first = read_form(reader)?;
     let second = read_form(reader)?;
     list.push(second);
     list.push(first);
-    Ok(MalObject::List(Rc::new(list)))
+    Ok(MalObject::wrap_list(list))
 }

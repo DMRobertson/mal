@@ -1,32 +1,33 @@
+extern crate derive_more;
 use crate::environment::Environment;
 use crate::strings::BuildError;
 use crate::tokens::StringLiteral;
 use crate::{evaluator, strings};
+use derive_more::{Deref, DerefMut};
 use itertools::Itertools;
 use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
-use std::convert::TryFrom;
+
 use std::fmt::Formatter;
 use std::ops::{RangeFrom, RangeInclusive};
 use std::rc::Rc;
 use std::{fmt, rc};
 
-pub type MalList = Vec<MalObject>;
-pub type MalVector = Vec<MalObject>;
-pub type MalMap = HashMap<HashKey, MalObject>;
+#[derive(Deref, DerefMut, Debug)]
+pub struct MalList(pub Vec<MalObject>);
+#[derive(Deref, DerefMut, Debug)]
+pub struct MalVector(pub Vec<MalObject>);
+
+#[derive(Deref, DerefMut, Debug)]
+pub struct MalMap(pub HashMap<HashKey, MalObject>);
 pub type MalInt = isize;
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct MalSymbol {
-    pub name: String,
-}
+#[derive(Deref, Debug, PartialEq, Eq, Hash, Clone)]
+pub struct MalSymbol(pub String);
 
-impl<T> From<T> for MalSymbol
-where
-    T: Into<String>,
-{
-    fn from(item: T) -> Self {
-        Self { name: item.into() }
+impl AsRef<str> for MalSymbol {
+    fn as_ref(&self) -> &str {
+        &self.0
     }
 }
 
@@ -127,9 +128,9 @@ pub struct ClosureParameters {
 
 impl fmt::Display for ClosureParameters {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.positional.iter().map(|s| &s.name).join(" "))?;
+        write!(f, "{}", self.positional.iter().join(" "))?;
         if let Some(rest) = &self.others {
-            write!(f, " & {}", rest.name)?;
+            write!(f, " & {}", rest)?;
         }
         Ok(())
     }
@@ -144,7 +145,7 @@ pub enum BadClosureParameters {
 
 impl ClosureParameters {
     pub fn new(mut symbols: Vec<MalSymbol>) -> Result<Self, BadClosureParameters> {
-        let is_ampersand = |s: &&MalSymbol| s.name == "&";
+        let is_ampersand = |s: &&MalSymbol| ***s == "&";
         let ampersand_count = symbols.iter().filter(is_ampersand).count();
 
         match ampersand_count {
@@ -269,6 +270,7 @@ pub(crate) fn callable(obj: &MalObject) -> bool {
 #[derive(Debug)]
 pub enum TypeMismatch {
     NotAnInt,
+    NotAList,
     NotASequence,
     NotASymbol,
     NotAString,
@@ -276,27 +278,36 @@ pub enum TypeMismatch {
     NotCallable,
 }
 
-impl TryFrom<&MalObject> for MalInt {
-    type Error = TypeMismatch;
-
-    fn try_from(value: &MalObject) -> Result<Self, Self::Error> {
-        match value {
+impl MalObject {
+    pub(crate) fn as_int(&self) -> Result<MalInt, TypeMismatch> {
+        match self {
             MalObject::Integer(x) => Ok(*x),
             _ => Err(TypeMismatch::NotAnInt),
         }
     }
-}
 
-impl TryFrom<&MalObject> for Rc<MalList> {
-    type Error = TypeMismatch;
+    pub(crate) fn as_list(&self) -> Result<&MalList, TypeMismatch> {
+        match self {
+            MalObject::List(x) => Ok(x),
+            _ => Err(TypeMismatch::NotAList),
+        }
+    }
 
-    fn try_from(value: &MalObject) -> Result<Self, Self::Error> {
-        match value {
-            MalObject::List(x) => Ok(x.clone()),
-            MalObject::Vector(x) => Ok(x.clone()),
+    pub(crate) fn as_seq(&self) -> Result<&[MalObject], TypeMismatch> {
+        match self {
+            MalObject::List(x) => Ok(x),
+            MalObject::Vector(x) => Ok(x),
             _ => Err(TypeMismatch::NotASequence),
         }
     }
+
+    pub(crate) fn as_symbol(&self) -> Result<&MalSymbol, TypeMismatch> {
+        match self {
+            MalObject::Symbol(s) => Ok(s),
+            _ => Err(TypeMismatch::NotASymbol),
+        }
+    }
+
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -312,11 +323,11 @@ pub enum MapError {
     UnhashableKey, // TODO include the key that wasn't hashable, or at least its position
 }
 
-pub(crate) fn build_map(entries: MalVector) -> Result<MalObject, MapError> {
+pub(crate) fn build_map(entries: Vec<MalObject>) -> Result<MalObject, MapError> {
     if entries.len() % 2 == 1 {
         return Err(MapError::MissingValue);
     }
-    let mut map = MalMap::new();
+    let mut map = MalMap(HashMap::new());
     for (key, value) in entries.into_iter().tuples() {
         let key = match key {
             MalObject::String(s) => Ok(HashKey::String(s)),
@@ -338,36 +349,33 @@ pub(crate) fn build_string(src: &StringLiteral) -> Result<MalObject, BuildError>
 }
 
 impl MalObject {
-    pub(crate) fn new_sequence() -> Rc<Vec<Self>> {
-        Rc::new(Vec::new())
-    }
     pub(crate) fn new_list() -> Self {
-        Self::List(Self::new_sequence())
+        Self::List(Rc::new(MalList(Vec::new())))
     }
     pub(crate) fn wrap_list(elements: Vec<MalObject>) -> Self {
-        Self::List(Rc::new(elements))
+        Self::List(Rc::new(MalList(elements)))
     }
     pub(crate) fn wrap_vector(elements: Vec<MalObject>) -> Self {
-        Self::Vector(Rc::new(elements))
+        Self::Vector(Rc::new(MalVector(elements)))
     }
     pub(crate) fn new_symbol(name: &str) -> Self {
-        Self::Symbol(MalSymbol::from(name))
+        Self::Symbol(MalSymbol(name.into()))
     }
 }
 
 impl PartialEq for MalObject {
     fn eq(&self, other: &Self) -> bool {
         use MalObject::*;
+        if let (Some(x), Some(y)) = (self.as_seq().ok(), other.as_seq().ok()) {
+            return equal_sequences(x, &y);
+        }
         match [self, other] {
             [Integer(x), Integer(y)] => x == y,
             [Bool(x), Bool(y)] => x == y,
-            [List(x), List(y)]
-            | [List(x), Vector(y)]
-            | [Vector(x), List(y)]
-            | [Vector(x), Vector(y)] => equal_sequences(x, y),
             [String(x), String(y)] => x == y,
             [Keyword(x), Keyword(y)] => x == y,
             [Symbol(x), Symbol(y)] => x == y,
+            // TODO: no comparison for maps!?
             [Nil, Nil] => true,
             [_, _] => false,
         }

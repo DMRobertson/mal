@@ -3,11 +3,10 @@ use crate::types::{callable, Arity, Atom, MalInt, MalObject, PrimitiveFn, TypeMi
 use crate::{evaluator, printer, reader, types};
 use itertools::Itertools;
 use std::collections::HashMap;
-use std::convert::TryFrom;
 use std::fs::read_to_string;
 
 fn grab_ints(args: &[MalObject]) -> evaluator::Result<Vec<MalInt>> {
-    let type_check: Result<Vec<_>, _> = args.iter().map(MalInt::try_from).collect();
+    let type_check: Result<Vec<_>, _> = args.iter().map(|o| o.as_int()).collect();
     type_check.map_err(evaluator::Error::TypeMismatch)
 }
 
@@ -318,16 +317,13 @@ const CONS: PrimitiveFn = PrimitiveFn {
     arity: Arity::exactly(2),
 };
 fn cons_(args: &[MalObject]) -> evaluator::Result {
-    match args {
-        [head, MalObject::List(tail)] | [head, MalObject::Vector(tail)] => {
-            let mut elements = Vec::new();
-            elements.push(head.clone());
-            elements.extend(tail.iter().map(MalObject::clone));
-            Ok(MalObject::wrap_list(elements))
-        }
-        [_, _] => Err(evaluator::Error::TypeMismatch(TypeMismatch::NotASequence)),
-        _ => unreachable!(),
-    }
+    let head = &args[0];
+    let tail = args[1].as_seq().map_err(evaluator::Error::TypeMismatch)?;
+
+    let mut elements = Vec::new();
+    elements.push(head.clone());
+    elements.extend(tail.iter().map(MalObject::clone));
+    Ok(MalObject::wrap_list(elements))
 }
 
 const CONCAT: PrimitiveFn = PrimitiveFn {
@@ -337,13 +333,12 @@ const CONCAT: PrimitiveFn = PrimitiveFn {
 };
 fn concat_(args: &[MalObject]) -> evaluator::Result {
     let mut output = Vec::new();
-    let mut extend = |seq: &MalObject| match seq {
-        MalObject::List(elements) | MalObject::Vector(elements) => {
-            output.extend(elements.iter().map(MalObject::clone));
-            Ok(())
-        }
-        _ => Err(evaluator::Error::TypeMismatch(TypeMismatch::NotASequence)),
+    let mut extend = |obj: &MalObject| {
+        obj.as_seq()
+            .map(|elements| output.extend(elements.iter().map(MalObject::clone)))
+            .map_err(evaluator::Error::TypeMismatch)
     };
+
     for arg in args {
         extend(arg)?;
     }

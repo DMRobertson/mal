@@ -1,6 +1,6 @@
 use crate::environment::Environment;
 use crate::evaluator::EVAL;
-use crate::types::{MalList, MalObject, MalSymbol};
+use crate::types::{MalObject, MalSymbol};
 use crate::{interpreter, printer};
 use ansi_term::Style;
 use linefeed::{DefaultTerminal, Interface, ReadResult, Terminal};
@@ -133,17 +133,17 @@ pub fn launch(mut args: Vec<String>, env: &Rc<Environment>) -> Result<(), Error>
             .map(|s| MalObject::String(s))
             .collect(),
     );
-    env.set(MalSymbol::from("*ARGV*"), script_args);
+    env.set(MalSymbol("*ARGV*".into()), script_args);
 
     match mode {
         Mode::Repl => run(|line| interpreter::rep(line, &env)).map_err(Error::IO),
         Mode::Batch(path) => {
-            let cmd: MalList = vec![
+            let cmd = MalObject::wrap_list(vec![
                 MalObject::new_symbol("load-file"),
                 MalObject::String(path.to_string()),
-            ];
-            log::debug!("Batch mode, run cmd {:?}", cmd);
-            match EVAL(&MalObject::wrap_list(cmd), &env) {
+            ]);
+            log::debug!("Batch mode, run cmd {}", cmd);
+            match EVAL(&cmd, &env) {
                 Ok(_) => Ok(()),
                 Err(e) => Err(Error::RepError(e.to_string())),
             }

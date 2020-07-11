@@ -1,15 +1,16 @@
-use crate::environment::Environment;
+use crate::environment::{Environment, UnknownSymbol};
 use crate::evaluator::ApplyOutcome::EvaluateFurther;
 use crate::types::{Arity, Closure, MalMap, MalObject, MalSymbol, PrimitiveEval, PrimitiveFn};
-use crate::{reader, special_forms, types};
-use std::borrow::Cow;
+use crate::{environment, reader, special_forms, types};
+
+use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
 
 pub type Result<T = MalObject> = std::result::Result<T, Error>;
 #[derive(Debug)]
 pub enum Error {
-    UnknownSymbol(String),
+    UnknownSymbol(environment::UnknownSymbol),
     ListHeadNotSymbol,
     Def(special_forms::DefError),
     Let(special_forms::LetError),
@@ -27,7 +28,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Evaluation error: ")?;
         match self {
-            Error::UnknownSymbol(s) => write!(f, "symbol {} not found", s),
+            Error::UnknownSymbol(UnknownSymbol(s)) => write!(f, "symbol {} not found", s),
             Error::ListHeadNotSymbol => {
                 write!(f, "cannot apply list whose first entry is not a symbol")
             }
@@ -57,7 +58,7 @@ pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
                 0 => return Ok(MalObject::new_list()),
                 _ => {
                     log::debug!("apply {:?}", argv);
-                    if let Symbol(MalSymbol { name }) = &argv[0] {
+                    if let Symbol(name) = &argv[0] {
                         match name.as_str() {
                             "def!" => return special_forms::apply_def(&argv[1..], &env),
                             "let*" => {
@@ -148,7 +149,7 @@ pub(crate) fn apply(callable: &MalObject, args: &[MalObject]) -> Result<ApplyOut
 pub(crate) fn evaluate_ast(ast: &MalObject, env: &Rc<Environment>) -> Result {
     log::trace!("evaluate_ast {:?}", ast);
     match ast {
-        MalObject::Symbol(s) => fetch_symbol(s, env),
+        MalObject::Symbol(s) => env.fetch(s).map_err(Error::UnknownSymbol),
         MalObject::List(list) => evaluate_sequence_elementwise(list, env).map(MalObject::wrap_list),
         MalObject::Vector(vec) => {
             evaluate_sequence_elementwise(vec, env).map(MalObject::wrap_vector)
@@ -159,9 +160,8 @@ pub(crate) fn evaluate_ast(ast: &MalObject, env: &Rc<Environment>) -> Result {
 }
 
 fn evaluate_map(map: &MalMap, env: &Rc<Environment>) -> Result {
-    let mut evaluated = MalMap::new();
-    for key in map.keys() {
-        let old_value = map.get(key).unwrap();
+    let mut evaluated = MalMap(HashMap::new());
+    for (key, old_value) in map.iter() {
         let new_value = EVAL(old_value, env)?;
         evaluated.insert(key.clone(), new_value);
     }
@@ -175,11 +175,6 @@ pub fn evaluate_sequence_elementwise(
     let mapped: std::result::Result<Vec<MalObject>, Error> =
         seq.iter().map(|obj| EVAL(obj, env)).collect();
     mapped
-}
-
-fn fetch_symbol(s: &MalSymbol, env: &Environment) -> Result {
-    env.get(s)
-        .ok_or_else(|| Error::UnknownSymbol(s.name.clone()))
 }
 
 pub fn call_primitive(func: &'static PrimitiveFn, args: &[MalObject]) -> Result {
