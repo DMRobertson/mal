@@ -393,7 +393,7 @@ impl PartialEq for MalObject {
             [String(x), String(y)] => x == y,
             [Keyword(x), Keyword(y)] => x == y,
             [Symbol(x), Symbol(y)] => x == y,
-            // TODO: no comparison for maps!?
+            [Map(x), Map(y)] => equal_maps(x, y),
             [Nil, Nil] => true,
             [_, _] => false,
         }
@@ -406,6 +406,10 @@ impl PartialEq for MalObject {
 // Update: Think this is fine since MalObject should be cheap to clone?
 fn equal_sequences(xs: &[MalObject], ys: &[MalObject]) -> bool {
     xs.len() == ys.len() && xs.iter().zip(ys).all(|(x, y)| x == y)
+}
+
+fn equal_maps(xs: &MalMap, ys: &MalMap) -> bool {
+    xs.0.len() == ys.0.len() && xs.iter().all(|(key, value)| ys.get(key) == Some(value))
 }
 
 impl Eq for MalObject {}
