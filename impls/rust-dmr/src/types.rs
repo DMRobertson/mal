@@ -281,6 +281,8 @@ pub enum TypeMismatch {
     NotAnAtom,
     NotCallable,
     NotAClosure,
+    NotIntoKeyword,
+    NotABool,
 }
 
 impl MalObject {
@@ -320,9 +322,71 @@ impl MalObject {
         }
     }
 
+    pub(crate) fn as_string(&self) -> Result<&str, TypeMismatch> {
+        match self {
+            MalObject::String(s) => Ok(s),
+            _ => Err(TypeMismatch::NotAString),
+        }
+    }
+
+    pub(crate) fn as_atom(&self) -> Result<&Atom, TypeMismatch> {
+        match self {
+            MalObject::Atom(a) => Ok(a),
+            _ => Err(TypeMismatch::NotAnAtom),
+        }
+    }
+    pub(crate) fn as_bool(&self) -> Result<bool, TypeMismatch> {
+        match self {
+            MalObject::Bool(b) => Ok(b.clone()),
+            _ => Err(TypeMismatch::NotABool),
+        }
+    }
+
     pub(crate) fn is_nil(&self) -> bool {
         match self {
             MalObject::Nil => true,
+            _ => false,
+        }
+    }
+    pub(crate) fn is_list(&self) -> bool {
+        match self {
+            MalObject::List(_) => true,
+            _ => false,
+        }
+    }
+    pub(crate) fn is_vector(&self) -> bool {
+        match self {
+            MalObject::Vector(_) => true,
+            _ => false,
+        }
+    }
+    pub(crate) fn is_seq(&self) -> bool {
+        match self {
+            MalObject::Vector(_) | MalObject::List(_) => true,
+            _ => false,
+        }
+    }
+    pub(crate) fn is_atom(&self) -> bool {
+        match self {
+            MalObject::Atom(_) => true,
+            _ => false,
+        }
+    }
+    pub(crate) fn is_symbol(&self) -> bool {
+        match self {
+            MalObject::Symbol(_) => true,
+            _ => false,
+        }
+    }
+    pub(crate) fn is_keyword(&self) -> bool {
+        match self {
+            MalObject::Keyword(_) => true,
+            _ => false,
+        }
+    }
+    pub(crate) fn is_map(&self) -> bool {
+        match self {
+            MalObject::Map(_) => true,
             _ => false,
         }
     }
@@ -378,6 +442,9 @@ impl MalObject {
     }
     pub(crate) fn new_symbol(name: &str) -> Self {
         Self::Symbol(MalSymbol(name.into()))
+    }
+    pub(crate) fn new_keyword(name: &str) -> Self {
+        Self::Keyword(name.into())
     }
 }
 

@@ -11,27 +11,36 @@ fn grab_ints(args: &[MalObject]) -> evaluator::Result<Vec<MalInt>> {
     type_check.map_err(evaluator::Error::TypeMismatch)
 }
 
+const SUM: PrimitiveFn = PrimitiveFn {
+    name: "+",
+    fn_ptr: sum_,
+    arity: Arity::AtLeast(0..),
+};
+
 fn sum_(args: &[MalObject]) -> evaluator::Result {
     let value = grab_ints(args)?
         .iter()
         .fold(0 as MalInt, |acc, &x| acc.wrapping_add(x));
     Ok(MalObject::Integer(value))
 }
-const SUM: PrimitiveFn = PrimitiveFn {
-    name: "+",
-    fn_ptr: sum_,
-    arity: Arity::AtLeast(0..),
+
+const SUB: PrimitiveFn = PrimitiveFn {
+    name: "-",
+    fn_ptr: sub_,
+    arity: Arity::exactly(2),
 };
+
 fn sub_(args: &[MalObject]) -> evaluator::Result {
     match grab_ints(args)?.as_slice() {
         [x, y] => Ok(MalObject::Integer(x.wrapping_sub(*y))),
         _ => panic!(),
     }
 }
-const SUB: PrimitiveFn = PrimitiveFn {
-    name: "-",
-    fn_ptr: sub_,
-    arity: Arity::exactly(2),
+
+const MUL: PrimitiveFn = PrimitiveFn {
+    name: "*",
+    fn_ptr: mul_,
+    arity: Arity::AtLeast(0..),
 };
 
 fn mul_(args: &[MalObject]) -> evaluator::Result {
@@ -41,24 +50,19 @@ fn mul_(args: &[MalObject]) -> evaluator::Result {
     Ok(MalObject::Integer(value))
 }
 
-const MUL: PrimitiveFn = PrimitiveFn {
-    name: "*",
-    fn_ptr: mul_,
-    arity: Arity::AtLeast(0..),
+const DIV: PrimitiveFn = PrimitiveFn {
+    name: "/",
+    fn_ptr: div_,
+    arity: Arity::exactly(2),
 };
 
 fn div_(args: &[MalObject]) -> evaluator::Result {
     match grab_ints(args)?.as_slice() {
         [_, 0] => Err(evaluator::Error::DivideByZero),
         [x, y] => Ok(MalObject::Integer(x.wrapping_div(*y))),
-        _ => panic!(),
+        _ => unreachable!(),
     }
 }
-const DIV: PrimitiveFn = PrimitiveFn {
-    name: "/",
-    fn_ptr: div_,
-    arity: Arity::exactly(2),
-};
 
 fn comparison_(args: &[MalObject], comp: fn(&MalInt, &MalInt) -> bool) -> evaluator::Result {
     match grab_ints(args)?.as_slice() {
@@ -86,22 +90,14 @@ comparison_primitive!(<=, LE);
 comparison_primitive!(>, GT);
 comparison_primitive!(>=, GE);
 
-fn list_(args: &[MalObject]) -> evaluator::Result {
-    Ok(MalObject::wrap_list(args.to_vec()))
-}
-
 const LIST: PrimitiveFn = PrimitiveFn {
     name: "list",
     fn_ptr: list_,
     arity: Arity::at_least(0),
 };
 
-fn list_test_(args: &[MalObject]) -> evaluator::Result {
-    let is_list = match args[0] {
-        MalObject::List(_) => true,
-        _ => false,
-    };
-    Ok(MalObject::Bool(is_list))
+fn list_(args: &[MalObject]) -> evaluator::Result {
+    Ok(MalObject::wrap_list(args.to_vec()))
 }
 
 const LIST_TEST: PrimitiveFn = PrimitiveFn {
@@ -110,20 +106,57 @@ const LIST_TEST: PrimitiveFn = PrimitiveFn {
     arity: Arity::exactly(1),
 };
 
-fn empty_test_(args: &[MalObject]) -> evaluator::Result {
-    match &args[0] {
-        MalObject::List(list) => Ok(list.is_empty()),
-        MalObject::Vector(vec) => Ok(vec.is_empty()),
-        _ => Err(evaluator::Error::TypeMismatch(
-            types::TypeMismatch::NotASequence,
-        )),
-    }
-    .map(MalObject::Bool)
+fn list_test_(args: &[MalObject]) -> evaluator::Result {
+    Ok(MalObject::Bool(args[0].is_list()))
+}
+
+const VECTOR: PrimitiveFn = PrimitiveFn {
+    name: "vector",
+    fn_ptr: vector_,
+    arity: Arity::at_least(0),
+};
+
+fn vector_(args: &[MalObject]) -> evaluator::Result {
+    Ok(MalObject::wrap_vector(args.to_vec()))
+}
+
+const VECTOR_TEST: PrimitiveFn = PrimitiveFn {
+    name: "vector?",
+    fn_ptr: vector_test_,
+    arity: Arity::exactly(1),
+};
+
+fn vector_test_(args: &[MalObject]) -> evaluator::Result {
+    Ok(MalObject::Bool(args[0].is_vector()))
+}
+
+const SEQUENTIAL_TEST: PrimitiveFn = PrimitiveFn {
+    name: "sequential?",
+    fn_ptr: sequential_test_,
+    arity: Arity::exactly(1),
+};
+
+fn sequential_test_(args: &[MalObject]) -> evaluator::Result {
+    Ok(MalObject::Bool(args[0].is_seq()))
 }
 
 const EMPTY_TEST: PrimitiveFn = PrimitiveFn {
     name: "empty?",
     fn_ptr: empty_test_,
+    arity: Arity::exactly(1),
+};
+
+fn empty_test_(args: &[MalObject]) -> evaluator::Result {
+    args[0]
+        .as_seq()
+        .map(|slice| slice.is_empty())
+        .map(MalObject::Bool)
+        .map_err(evaluator::Error::TypeMismatch)
+}
+
+const COUNT: PrimitiveFn = PrimitiveFn {
+    name: "count",
+    fn_ptr: count_,
     arity: Arity::exactly(1),
 };
 
@@ -140,28 +173,15 @@ fn count_(args: &[MalObject]) -> evaluator::Result {
     .map(MalObject::Integer)
 }
 
-const COUNT: PrimitiveFn = PrimitiveFn {
-    name: "count",
-    fn_ptr: count_,
-    arity: Arity::exactly(1),
-};
-
-fn equal(args: &[MalObject]) -> evaluator::Result {
-    Ok(MalObject::Bool(equal_(args)))
-}
-
-fn equal_(args: &[MalObject]) -> bool {
-    match &args[..2] {
-        [x, y] => x == y,
-        _ => unreachable!(),
-    }
-}
-
 const EQUAL: PrimitiveFn = PrimitiveFn {
     name: "=",
     fn_ptr: equal,
     arity: Arity::exactly(2),
 };
+
+fn equal(args: &[MalObject]) -> evaluator::Result {
+    Ok(MalObject::Bool(args[0] == args[1]))
+}
 
 fn print_string_internal(
     args: &[MalObject],
@@ -212,13 +232,12 @@ const READ_STRING: PrimitiveFn = PrimitiveFn {
     fn_ptr: read_string_,
     arity: Arity::exactly(1),
 };
+
 fn read_string_(args: &[MalObject]) -> evaluator::Result {
-    match &args[0] {
-        MalObject::String(s) => reader::read_str(s).map_err(evaluator::Error::ReadError),
-        _ => Err(evaluator::Error::TypeMismatch(
-            types::TypeMismatch::NotAString,
-        )),
-    }
+    let string = args[0]
+        .as_string()
+        .map_err(evaluator::Error::TypeMismatch)?;
+    reader::read_str(string).map_err(evaluator::Error::ReadError)
 }
 
 const SLURP: PrimitiveFn = PrimitiveFn {
@@ -226,14 +245,14 @@ const SLURP: PrimitiveFn = PrimitiveFn {
     fn_ptr: slurp_,
     arity: Arity::exactly(1),
 };
+
 fn slurp_(args: &[MalObject]) -> evaluator::Result {
-    match &args[0] {
-        MalObject::String(s) => read_to_string(s).map_err(evaluator::Error::IOError),
-        _ => Err(evaluator::Error::TypeMismatch(
-            types::TypeMismatch::NotAString,
-        )),
-    }
-    .map(MalObject::String)
+    let s = args[0]
+        .as_string()
+        .map_err(evaluator::Error::TypeMismatch)?;
+    read_to_string(s)
+        .map_err(evaluator::Error::IOError)
+        .map(MalObject::String)
 }
 
 const ATOM: PrimitiveFn = PrimitiveFn {
@@ -241,19 +260,19 @@ const ATOM: PrimitiveFn = PrimitiveFn {
     fn_ptr: atom_,
     arity: Arity::exactly(1),
 };
+
 fn atom_(args: &[MalObject]) -> evaluator::Result {
     Ok(MalObject::Atom(Atom::new(&args[0])))
 }
+
 const ATOM_TEST: PrimitiveFn = PrimitiveFn {
     name: "atom?",
     fn_ptr: atom_test_,
     arity: Arity::exactly(1),
 };
+
 fn atom_test_(args: &[MalObject]) -> evaluator::Result {
-    match &args[0] {
-        MalObject::Atom(_) => Ok(MalObject::Bool(true)),
-        _ => Ok(MalObject::Bool(false)),
-    }
+    Ok(MalObject::Bool(args[0].is_atom()))
 }
 
 const DEREF: PrimitiveFn = PrimitiveFn {
@@ -261,11 +280,12 @@ const DEREF: PrimitiveFn = PrimitiveFn {
     fn_ptr: deref_,
     arity: Arity::exactly(1),
 };
+
 fn deref_(args: &[MalObject]) -> evaluator::Result {
-    match &args[0] {
-        MalObject::Atom(a) => Ok(a.clone_payload()),
-        _ => Err(evaluator::Error::TypeMismatch(TypeMismatch::NotAnAtom)),
-    }
+    args[0]
+        .as_atom()
+        .map_err(evaluator::Error::TypeMismatch)
+        .map(Atom::clone_payload)
 }
 
 const RESET: PrimitiveFn = PrimitiveFn {
@@ -273,15 +293,11 @@ const RESET: PrimitiveFn = PrimitiveFn {
     fn_ptr: reset_,
     arity: Arity::exactly(2),
 };
+
 fn reset_(args: &[MalObject]) -> evaluator::Result {
-    match args {
-        [MalObject::Atom(a), obj] => {
-            a.replace(obj);
-            Ok(obj.clone())
-        }
-        [_, _] => Err(evaluator::Error::TypeMismatch(TypeMismatch::NotAnAtom)),
-        _ => unreachable!(),
-    }
+    let atom = args[0].as_atom().map_err(evaluator::Error::TypeMismatch)?;
+    atom.replace(&args[1]);
+    Ok(args[1].clone())
 }
 
 const SWAP: PrimitiveFn = PrimitiveFn {
@@ -289,27 +305,29 @@ const SWAP: PrimitiveFn = PrimitiveFn {
     fn_ptr: swap_,
     arity: Arity::at_least(2),
 };
+
 fn swap_(swap_args: &[MalObject]) -> evaluator::Result {
-    use MalObject::Atom;
-    match &swap_args[..2] {
-        [Atom(a), f] if callable(f) => {
-            let args = {
-                let mut args = Vec::new();
-                args.push(a.clone_payload());
-                args.extend_from_slice(&swap_args[2..]);
-                args
-            };
-            let result = apply(f, &args);
-            let obj = result.and_then(|outcome| match outcome {
-                ApplyOutcome::Finished(obj) => Ok(obj),
-                ApplyOutcome::EvaluateFurther(ast, env) => evaluator::EVAL(&ast, &env),
-            })?;
-            a.replace(&obj);
-            Ok(obj)
-        }
-        [Atom(_), _] => Err(evaluator::Error::TypeMismatch(TypeMismatch::NotCallable)),
-        _ => unreachable!(),
+    let atom = swap_args[0]
+        .as_atom()
+        .map_err(evaluator::Error::TypeMismatch)?;
+
+    let f = &swap_args[1];
+    if !callable(f) {
+        return Err(evaluator::Error::TypeMismatch(TypeMismatch::NotCallable));
     }
+    let args = {
+        let mut args = Vec::new();
+        args.push(atom.clone_payload());
+        args.extend_from_slice(&swap_args[2..]);
+        args
+    };
+    let result = apply(f, &args);
+    let obj = result.and_then(|outcome| match outcome {
+        ApplyOutcome::Finished(obj) => Ok(obj),
+        ApplyOutcome::EvaluateFurther(ast, env) => evaluator::EVAL(&ast, &env),
+    })?;
+    atom.replace(&obj);
+    Ok(obj)
 }
 
 const CONS: PrimitiveFn = PrimitiveFn {
@@ -317,6 +335,7 @@ const CONS: PrimitiveFn = PrimitiveFn {
     fn_ptr: cons_,
     arity: Arity::exactly(2),
 };
+
 fn cons_(args: &[MalObject]) -> evaluator::Result {
     let head = &args[0];
     let tail = args[1].as_seq().map_err(evaluator::Error::TypeMismatch)?;
@@ -332,6 +351,7 @@ const CONCAT: PrimitiveFn = PrimitiveFn {
     fn_ptr: concat_,
     arity: Arity::at_least(0),
 };
+
 fn concat_(args: &[MalObject]) -> evaluator::Result {
     let mut output = Vec::new();
     let mut extend = |obj: &MalObject| {
@@ -351,6 +371,7 @@ const NTH: PrimitiveFn = PrimitiveFn {
     fn_ptr: nth_,
     arity: Arity::exactly(2),
 };
+
 fn nth_(args: &[MalObject]) -> evaluator::Result {
     let seq = args[0].as_seq().map_err(evaluator::Error::TypeMismatch)?;
     let orig_index = args[1].as_int().map_err(evaluator::Error::TypeMismatch)?;
@@ -372,6 +393,7 @@ const FIRST: PrimitiveFn = PrimitiveFn {
     fn_ptr: first_,
     arity: Arity::exactly(1),
 };
+
 fn first_(args: &[MalObject]) -> evaluator::Result {
     if args[0].is_nil() {
         return Ok(MalObject::Nil);
@@ -388,6 +410,7 @@ const REST: PrimitiveFn = PrimitiveFn {
     fn_ptr: rest_,
     arity: Arity::exactly(1),
 };
+
 fn rest_(args: &[MalObject]) -> evaluator::Result {
     if args[0].is_nil() {
         return Ok(MalObject::new_list());
@@ -403,41 +426,142 @@ fn rest_(args: &[MalObject]) -> evaluator::Result {
     Ok(MalObject::wrap_list(copied))
 }
 
+const SYMBOL: PrimitiveFn = PrimitiveFn {
+    name: "symbol",
+    fn_ptr: symbol_,
+    arity: Arity::exactly(1),
+};
+
+fn symbol_(args: &[MalObject]) -> evaluator::Result {
+    args[0]
+        .as_string()
+        .map_err(evaluator::Error::TypeMismatch)
+        .map(MalObject::new_symbol)
+}
+
+const SYMBOL_TEST: PrimitiveFn = PrimitiveFn {
+    name: "symbol?",
+    fn_ptr: symbol_test_,
+    arity: Arity::exactly(1),
+};
+
+fn symbol_test_(args: &[MalObject]) -> evaluator::Result {
+    Ok(MalObject::Bool(args[0].is_symbol()))
+}
+
+const KEYWORD: PrimitiveFn = PrimitiveFn {
+    name: "keyword",
+    fn_ptr: keyword_,
+    arity: Arity::exactly(1),
+};
+
+fn keyword_(args: &[MalObject]) -> evaluator::Result {
+    match &args[0] {
+        MalObject::String(s) => Ok(MalObject::new_keyword(s)),
+        MalObject::Keyword(_) => Ok(args[0].clone()),
+        _ => Err(evaluator::Error::TypeMismatch(TypeMismatch::NotIntoKeyword)),
+    }
+}
+
+const KEYWORD_TEST: PrimitiveFn = PrimitiveFn {
+    name: "keyword?",
+    fn_ptr: keyword_test_,
+    arity: Arity::exactly(1),
+};
+
+fn keyword_test_(args: &[MalObject]) -> evaluator::Result {
+    Ok(MalObject::Bool(args[0].is_keyword()))
+}
+
+const MAP_TEST: PrimitiveFn = PrimitiveFn {
+    name: "map?",
+    fn_ptr: map_test_,
+    arity: Arity::exactly(1),
+};
+
+fn map_test_(args: &[MalObject]) -> evaluator::Result {
+    Ok(MalObject::Bool(args[0].is_map()))
+}
+
+const NIL_TEST: PrimitiveFn = PrimitiveFn {
+    name: "nil?",
+    fn_ptr: nil_test_,
+    arity: Arity::exactly(1),
+};
+fn nil_test_(args: &[MalObject]) -> evaluator::Result {
+    Ok(MalObject::Bool(args[0].is_nil()))
+}
+const TRUE_TEST: PrimitiveFn = PrimitiveFn {
+    name: "true?",
+    fn_ptr: true_test_,
+    arity: Arity::exactly(1),
+};
+fn true_test_(args: &[MalObject]) -> evaluator::Result {
+    Ok(MalObject::Bool(args[0].as_bool().unwrap_or(false)))
+}
+const FALSE_TEST: PrimitiveFn = PrimitiveFn {
+    name: "false?",
+    fn_ptr: false_test_,
+    arity: Arity::exactly(1),
+};
+fn false_test_(args: &[MalObject]) -> evaluator::Result {
+    Ok(MalObject::Bool(
+        args[0].as_bool().map(|b| !b).unwrap_or(false),
+    ))
+}
+
 type Namespace = HashMap<&'static str, &'static PrimitiveFn>;
 lazy_static! {
     pub static ref CORE: Namespace = {
         let mut map = Namespace::new();
-        for func in &[
+        for func in [
+            // Arithmetic
             SUM,
             SUB,
             MUL,
             DIV,
-            LIST,
-            LIST_TEST,
-            EMPTY_TEST,
-            COUNT,
+            // Comparisons
             GT,
             GE,
             LT,
             LE,
-            EQUAL,
+            // Working with strings
             PR_STR,
             STR,
             PRN,
             PRINTLN,
             READ_STRING,
             SLURP,
-            ATOM,
-            ATOM_TEST,
-            DEREF,
-            RESET,
-            SWAP,
+            // Working with lists
             CONS,
             CONCAT,
             NTH,
             FIRST,
             REST,
-        ] {
+            // Working with atoms
+            DEREF,
+            RESET,
+            SWAP,
+            // Casting
+            NIL_TEST,
+            TRUE_TEST,
+            FALSE_TEST,
+            LIST,
+            LIST_TEST,
+            VECTOR,
+            VECTOR_TEST,
+            SEQUENTIAL_TEST,
+            EMPTY_TEST,
+            COUNT,
+            EQUAL,
+            ATOM,
+            ATOM_TEST,
+            SYMBOL,
+            SYMBOL_TEST,
+            KEYWORD,
+            KEYWORD_TEST,
+            MAP_TEST,
+        ].iter() {
             map.insert(func.name, func);
         }
         map
