@@ -178,7 +178,7 @@ pub(crate) fn apply(callable: &MalObject, args: &[MalObject]) -> Result<ApplyOut
             let env = env.upgrade().expect("eval: env destroyed");
             Ok(EvaluateFurther(args[0].clone(), env))
         }
-        _ => panic!("apply: bad MalObject {:?}", callable),
+        _ => Err(Error::TypeMismatch(TypeMismatch::NotCallable)),
     }
 }
 

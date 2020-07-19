@@ -505,6 +505,32 @@ fn false_test_(args: &[MalObject]) -> evaluator::Result {
     ))
 }
 
+const APPLY: PrimitiveFn = PrimitiveFn {
+    name: "apply",
+    fn_ptr: apply_,
+    arity: Arity::at_least(2),
+};
+fn apply_(args: &[MalObject]) -> evaluator::Result {
+    let mut concatenated = args[1..args.len() - 1].to_vec();
+    let last = args[args.len() - 1].as_seq()?;
+    concatenated.extend_from_slice(last);
+    evaluator::apply_fully(&args[0], &concatenated)
+}
+
+const MAP: PrimitiveFn = PrimitiveFn {
+    name: "map",
+    fn_ptr: map_,
+    arity: Arity::exactly(2),
+};
+fn map_(args: &[MalObject]) -> evaluator::Result {
+    let result: Result<Vec<_>, _> = args[1]
+        .as_seq()?
+        .chunks_exact(1)
+        .map(|obj| evaluator::apply_fully(&args[0], obj))
+        .collect();
+    Ok(MalObject::wrap_list(result?))
+}
+
 type Namespace = HashMap<&'static str, &'static PrimitiveFn>;
 lazy_static! {
     pub static ref CORE: Namespace = {
@@ -533,6 +559,8 @@ lazy_static! {
             NTH,
             FIRST,
             REST,
+            APPLY,
+            MAP,
             // Working with atoms
             DEREF,
             RESET,
