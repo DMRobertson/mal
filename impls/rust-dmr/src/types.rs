@@ -18,7 +18,7 @@ pub struct MalList(pub Vec<MalObject>);
 #[derive(Deref, DerefMut, Debug)]
 pub struct MalVector(pub Vec<MalObject>);
 
-#[derive(Deref, DerefMut, Debug)]
+#[derive(Clone, Deref, DerefMut, Debug)]
 pub struct MalMap(pub HashMap<HashKey, MalObject>);
 pub type MalInt = isize;
 
@@ -35,6 +35,7 @@ impl AsRef<str> for MalSymbol {
 pub enum Arity {
     Between(RangeInclusive<usize>),
     AtLeast(RangeFrom<usize>),
+    Odd,
 }
 
 #[derive(Debug)]
@@ -67,6 +68,7 @@ impl Arity {
         match self {
             Self::Between(range) => range.contains(&n),
             Self::AtLeast(range) => range.contains(&n),
+            Self::Odd => n % 2 == 1,
         }
     }
 
@@ -93,6 +95,7 @@ impl fmt::Display for Arity {
                 }
             }
             Arity::AtLeast(r) => write!(f, "At least {}", r.start),
+            Arity::Odd => write!(f, "any odd number"),
         }
     }
 }
@@ -283,6 +286,8 @@ pub enum TypeMismatch {
     NotAClosure,
     NotIntoKeyword,
     NotABool,
+    NotAMap,
+    NotAValidKey,
 }
 
 impl MalObject {
@@ -305,6 +310,13 @@ impl MalObject {
             MalObject::List(x) => Ok(x),
             MalObject::Vector(x) => Ok(x),
             _ => Err(TypeMismatch::NotASequence),
+        }
+    }
+
+    pub(crate) fn as_map(&self) -> Result<&MalMap, TypeMismatch> {
+        match self {
+            MalObject::Map(x) => Ok(x),
+            _ => Err(TypeMismatch::NotAMap),
         }
     }
 
@@ -339,6 +351,14 @@ impl MalObject {
         match self {
             MalObject::Bool(b) => Ok(b.clone()),
             _ => Err(TypeMismatch::NotABool),
+        }
+    }
+
+    pub(crate) fn as_hashkey(&self) -> Result<HashKey, TypeMismatch> {
+        match self {
+            MalObject::String(s) => Ok(HashKey::String(s.clone())),
+            MalObject::Keyword(s) => Ok(HashKey::Keyword(s.clone())),
+            _ => Err(TypeMismatch::NotAValidKey),
         }
     }
 
@@ -411,11 +431,8 @@ pub(crate) fn build_map(entries: Vec<MalObject>) -> Result<MalObject, MapError> 
     }
     let mut map = MalMap(HashMap::new());
     for (key, value) in entries.into_iter().tuples() {
-        let key = match key {
-            MalObject::String(s) => Ok(HashKey::String(s)),
-            MalObject::Keyword(s) => Ok(HashKey::Keyword(s)),
-            _ => Err(MapError::UnhashableKey),
-        }?;
+        // TODO: get rid of these small errors like MapError. Let's have one larger error type used everywhere?
+        let key = key.as_hashkey().map_err(|_| MapError::UnhashableKey)?;
         map.insert(key, value);
         // TODO detect duplicate keys?
     }
@@ -436,6 +453,9 @@ impl MalObject {
     }
     pub(crate) fn wrap_list(elements: Vec<MalObject>) -> Self {
         Self::List(Rc::new(MalList(elements)))
+    }
+    pub(crate) fn wrap_map(map: MalMap) -> Self {
+        Self::Map(Rc::new(map))
     }
     pub(crate) fn wrap_vector(elements: Vec<MalObject>) -> Self {
         Self::Vector(Rc::new(MalVector(elements)))

@@ -531,6 +531,21 @@ fn map_(args: &[MalObject]) -> evaluator::Result {
     Ok(MalObject::wrap_list(result?))
 }
 
+const ASSOC: PrimitiveFn = PrimitiveFn {
+    name: "assoc",
+    fn_ptr: assoc_,
+    arity: Arity::Odd,
+};
+fn assoc_(args: &[MalObject]) -> evaluator::Result {
+    let mut map = args[0].as_map()?.clone();
+    // TODO: some duplication here with types::build_map.
+    for (key, value) in args[1..].iter().tuples() {
+        let key = key.as_hashkey()?;
+        map.insert(key.clone(), value.clone());
+    }
+    Ok(MalObject::wrap_map(map))
+}
+
 type Namespace = HashMap<&'static str, &'static PrimitiveFn>;
 lazy_static! {
     pub static ref CORE: Namespace = {
@@ -561,6 +576,8 @@ lazy_static! {
             REST,
             APPLY,
             MAP,
+            // Working with maps
+            ASSOC,
             // Working with atoms
             DEREF,
             RESET,
