@@ -1,6 +1,8 @@
 use crate::environment::{Environment, UnknownSymbol};
 use crate::evaluator::ApplyOutcome::EvaluateFurther;
-use crate::types::{Arity, Closure, MalMap, MalObject, MalSymbol, PrimitiveEval, PrimitiveFn};
+use crate::types::{
+    Arity, Closure, MalMap, MalObject, MalSymbol, PrimitiveEval, PrimitiveFn, TypeMismatch,
+};
 use crate::{environment, reader, special_forms, types};
 
 use std::collections::HashMap;
@@ -47,6 +49,12 @@ impl fmt::Display for Error {
                 write!(f, "bad index: {} not in range [{}, {})", i, r.start, r.end)
             }
         }
+    }
+}
+
+impl From<types::TypeMismatch> for Error {
+    fn from(t: TypeMismatch) -> Self {
+        Self::TypeMismatch(t)
     }
 }
 
@@ -140,6 +148,18 @@ pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
 pub(crate) enum ApplyOutcome {
     Finished(MalObject),
     EvaluateFurther(MalObject, Rc<Environment>),
+}
+
+// In order to apply a function we might have to apply that function, if the function is recursive.
+// To avoid stack overflow, "apply" just does one step of the application and returns the next thing that needs evaluating.
+// But that's only really useful within an EVAL call. Elsewhere we just want a value
+
+// TODO: this all seems a bit suspicious, and I wonder if there something I've misunderstood here.
+pub(crate) fn apply_fully(callable: &MalObject, args: &[MalObject]) -> Result {
+    apply(callable, &args).and_then(|outcome| match outcome {
+        ApplyOutcome::Finished(obj) => Ok(obj),
+        ApplyOutcome::EvaluateFurther(ast, env) => EVAL(&ast, &env),
+    })
 }
 
 pub(crate) fn apply(callable: &MalObject, args: &[MalObject]) -> Result<ApplyOutcome> {
@@ -241,19 +261,11 @@ fn is_macro_call<'a>(ast: &'a MalObject, env: &Environment) -> Option<&'a MalSym
 
 fn macroexpand(ast: &MalObject, env: &Rc<Environment>) -> Result {
     let mut ast = ast.clone();
-    let mut env = env.clone();
+    let env = env.clone();
     while let Some(symbol) = is_macro_call(&ast, &env) {
         log::debug!("macroexpand: env={}", env);
         let closure = env.get(symbol).unwrap();
-        match apply(&closure, &ast.as_list().unwrap()[1..])? {
-            ApplyOutcome::Finished(obj) => ast = obj,
-            EvaluateFurther(next_ast, next_env) => {
-                log::debug!("macroexpand: next_ast={}", next_ast);
-                ast = next_ast;
-                env = next_env;
-                ast = EVAL(&ast, &env)?;
-            }
-        }
+        ast = apply_fully(&closure, &ast.as_list().unwrap()[1..])?;
     }
     Ok(ast)
 }

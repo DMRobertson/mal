@@ -1,4 +1,3 @@
-use crate::evaluator::{apply, ApplyOutcome};
 use crate::types::{callable, Arity, Atom, MalInt, MalObject, PrimitiveFn, TypeMismatch};
 use crate::{evaluator, printer, reader, types};
 use itertools::Itertools;
@@ -321,11 +320,7 @@ fn swap_(swap_args: &[MalObject]) -> evaluator::Result {
         args.extend_from_slice(&swap_args[2..]);
         args
     };
-    let result = apply(f, &args);
-    let obj = result.and_then(|outcome| match outcome {
-        ApplyOutcome::Finished(obj) => Ok(obj),
-        ApplyOutcome::EvaluateFurther(ast, env) => evaluator::EVAL(&ast, &env),
-    })?;
+    let obj = evaluator::apply_fully(f, &args)?;
     atom.replace(&obj);
     Ok(obj)
 }
