@@ -36,6 +36,7 @@ pub enum Arity {
     Between(RangeInclusive<usize>),
     AtLeast(RangeFrom<usize>),
     Odd,
+    Even,
 }
 
 #[derive(Debug)]
@@ -69,6 +70,7 @@ impl Arity {
             Self::Between(range) => range.contains(&n),
             Self::AtLeast(range) => range.contains(&n),
             Self::Odd => n % 2 == 1,
+            Self::Even => n % 2 == 0,
         }
     }
 
@@ -96,6 +98,7 @@ impl fmt::Display for Arity {
             }
             Arity::AtLeast(r) => write!(f, "At least {}", r.start),
             Arity::Odd => write!(f, "any odd number"),
+            Arity::Even => write!(f, "any even number, including zero"),
         }
     }
 }
@@ -417,6 +420,15 @@ impl MalObject {
 pub enum HashKey {
     String(String),
     Keyword(String),
+}
+
+impl HashKey {
+    pub(crate) fn into_mal_object(&self) -> MalObject {
+        match self {
+            HashKey::String(x) => MalObject::String(x.clone()),
+            HashKey::Keyword(x) => MalObject::Keyword(x.clone()),
+        }
+    }
 }
 
 #[derive(Debug)]

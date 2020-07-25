@@ -1,4 +1,6 @@
-use crate::types::{callable, Arity, Atom, MalInt, MalObject, PrimitiveFn, TypeMismatch};
+use crate::types::{
+    callable, Arity, Atom, HashKey, MalInt, MalObject, MapError, PrimitiveFn, TypeMismatch,
+};
 use crate::{evaluator, printer, reader, types};
 use itertools::Itertools;
 use std::collections::HashMap;
@@ -531,6 +533,19 @@ fn map_(args: &[MalObject]) -> evaluator::Result {
     Ok(MalObject::wrap_list(result?))
 }
 
+const HASH_MAP: PrimitiveFn = PrimitiveFn {
+    name: "hash-map",
+    fn_ptr: hash_map,
+    arity: Arity::Even,
+};
+
+fn hash_map(args: &[MalObject]) -> evaluator::Result {
+    types::build_map(args.to_owned()).map_err(|e| match e {
+        MapError::MissingValue => unreachable!(), // parity checked by PrimtiveFn
+        MapError::UnhashableKey => evaluator::Error::TypeMismatch(TypeMismatch::NotAValidKey),
+    })
+}
+
 const ASSOC: PrimitiveFn = PrimitiveFn {
     name: "assoc",
     fn_ptr: assoc_,
@@ -544,6 +559,68 @@ fn assoc_(args: &[MalObject]) -> evaluator::Result {
         map.insert(key.clone(), value.clone());
     }
     Ok(MalObject::wrap_map(map))
+}
+
+const DISSOC: PrimitiveFn = PrimitiveFn {
+    name: "dissoc",
+    fn_ptr: dissoc_,
+    arity: Arity::at_least(1),
+};
+fn dissoc_(args: &[MalObject]) -> evaluator::Result {
+    let mut map = args[0].as_map()?.clone();
+    for arg in &args[1..] {
+        map.remove(&MalObject::as_hashkey(arg)?);
+    }
+    Ok(MalObject::wrap_map(map))
+}
+
+const GET: PrimitiveFn = PrimitiveFn {
+    name: "get",
+    fn_ptr: get_,
+    arity: Arity::exactly(2),
+};
+fn get_(args: &[MalObject]) -> evaluator::Result {
+    if args[0].is_nil() {
+        return Ok(MalObject::Nil);
+    }
+    let map = args[0].as_map()?;
+    let key = &args[1].as_hashkey()?;
+    Ok(map.get(key).unwrap_or(&MalObject::Nil).clone())
+}
+
+const CONTAINS: PrimitiveFn = PrimitiveFn {
+    name: "contains?",
+    fn_ptr: contains_,
+    arity: Arity::exactly(2),
+};
+fn contains_(args: &[MalObject]) -> evaluator::Result {
+    let map = args[0].as_map()?;
+    let key = &args[1].as_hashkey()?;
+    Ok(MalObject::Bool(map.get(key).is_some()))
+}
+
+const KEYS: PrimitiveFn = PrimitiveFn {
+    name: "keys",
+    fn_ptr: keys_,
+    arity: Arity::exactly(1),
+};
+fn keys_(args: &[MalObject]) -> evaluator::Result {
+    let keys = args[0]
+        .as_map()?
+        .keys()
+        .map(HashKey::into_mal_object)
+        .collect();
+    Ok(MalObject::wrap_list(keys))
+}
+
+const VALS: PrimitiveFn = PrimitiveFn {
+    name: "vals",
+    fn_ptr: vals_,
+    arity: Arity::exactly(1),
+};
+fn vals_(args: &[MalObject]) -> evaluator::Result {
+    let vals = args[0].as_map()?.values().cloned().collect();
+    Ok(MalObject::wrap_list(vals))
 }
 
 type Namespace = HashMap<&'static str, &'static PrimitiveFn>;
@@ -577,7 +654,13 @@ lazy_static! {
             APPLY,
             MAP,
             // Working with maps
+            HASH_MAP,
             ASSOC,
+            DISSOC,
+            GET,
+            CONTAINS,
+            KEYS,
+            VALS,
             // Working with atoms
             DEREF,
             RESET,
