@@ -140,7 +140,7 @@ pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
                                 return macroexpand(&argv[1], &env);
                             }
                             "try*" => {
-                                Arity::exactly(2)
+                                Arity::Between(1..=2)
                                     .validate_for(argv[1..].len(), "try*")
                                     .map_err(Error::BadArgCount)?;
                                 let (new_ast, new_env) =

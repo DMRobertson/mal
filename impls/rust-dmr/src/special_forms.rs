@@ -200,28 +200,36 @@ fn quasiquote_internal(ast: &[MalObject]) -> std::result::Result<MalObject, BadA
     }
 }
 pub fn apply_try(args: &[MalObject], env: &Rc<Environment>) -> Result<EvalContext> {
-    Arity::exactly(2)
-        .validate_for(args.len(), "try* contents")
-        .map_err(Error::BadArgCount)?;
-
     let ast = &args[0];
-    let catch = args[1].as_list()?;
-    Arity::exactly(3)
-        .validate_for(catch.len(), "try* catch list")
-        .map_err(Error::BadArgCount)?;
+    let catch = args.get(1);
+    let catch_data = catch.map(|obj| -> Result<_> {
+        let data = obj.as_list()?;
+        Arity::exactly(3)
+            .validate_for(data.len(), "try* catch list")
+            .map_err(Error::BadArgCount)?;
 
-    let catch_sym: MalObject = MalObject::new_symbol("catch*");
-    if catch[0] != catch_sym {
-        return Err(Error::MissingCatchFromTry);
-    }
-    let exception_name = catch[1].as_symbol()?;
+        let catch_sym: MalObject = MalObject::new_symbol("catch*");
+        if data[0] != catch_sym {
+            Err(Error::MissingCatchFromTry)?;
+        };
+        let exception_name = data[1].as_symbol()?;
+        let exception_handler = &data[2];
+        Ok((exception_name, exception_handler))
+    });
 
-    match EVAL(ast, env) {
-        Ok(ast) => Ok((ast, env.clone())),
-        Err(original) => {
+    let catch_data = match catch_data {
+        None => None,
+        Some(Ok(x)) => Some(x),
+        Some(Err(e)) => return Err(e),
+    };
+
+    match (EVAL(ast, env), catch_data) {
+        (Ok(ast), _) => Ok((ast, env.clone())),
+        (Err(original), None) => Err(original),
+        (Err(original), Some((exception_name, exception_handler))) => {
             let exception_env = Environment::spawn_from(env);
             exception_env.set(exception_name.clone(), MalObject::from(&original));
-            match EVAL(&catch[2], &exception_env) {
+            match EVAL(&exception_handler, &exception_env) {
                 Ok(obj) => Ok((obj, env.clone())),
                 Err(then) => Err(Error::InCatchHandler(ErrorDuringCatch {
                     original: Box::new(original),
