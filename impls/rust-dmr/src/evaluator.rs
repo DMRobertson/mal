@@ -19,6 +19,8 @@ pub enum Error {
     Let(special_forms::LetError),
     Do(special_forms::DoError),
     Fn(special_forms::FnError),
+    MissingCatchFromTry,
+    InCatchHandler(ErrorDuringCatch),
     TypeMismatch(types::TypeMismatch),
     BadArgCount(types::BadArgCount),
     BadIndex(isize, Range<usize>),
@@ -26,6 +28,12 @@ pub enum Error {
     // TODO the arrangement of all these errors needs a rethink IMO!
     ReadError(reader::Error),
     IOError(std::io::Error),
+}
+
+#[derive(Debug)]
+pub struct ErrorDuringCatch {
+    pub original: Box<Error>,
+    pub then: Box<Error>,
 }
 
 impl fmt::Display for Error {
@@ -48,6 +56,12 @@ impl fmt::Display for Error {
             Error::BadIndex(i, r) => {
                 write!(f, "bad index: {} not in range [{}, {})", i, r.start, r.end)
             }
+            Error::MissingCatchFromTry => write!(f, "bad syntax: missing catch* from try*"),
+            Error::InCatchHandler(e) => write!(
+                f,
+                "{}\nWhile handling the above exception, another exception occurred: {}",
+                e.original, e.then
+            ),
         }
     }
 }
@@ -55,6 +69,12 @@ impl fmt::Display for Error {
 impl From<types::TypeMismatch> for Error {
     fn from(t: TypeMismatch) -> Self {
         Self::TypeMismatch(t)
+    }
+}
+
+impl From<Error> for MalObject {
+    fn from(e: Error) -> Self {
+        MalObject::String(format!("Exception: {}", e))
     }
 }
 
@@ -114,6 +134,16 @@ pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
                                     .validate_for(argv[1..].len(), "macroexpand")
                                     .map_err(Error::BadArgCount)?;
                                 return macroexpand(&argv[1], &env);
+                            }
+                            "try*" => {
+                                Arity::exactly(2)
+                                    .validate_for(argv[1..].len(), "try*")
+                                    .map_err(Error::BadArgCount)?;
+                                let (new_ast, new_env) =
+                                    special_forms::apply_try(&argv[1..], &env)?;
+                                env = new_env;
+                                ast = new_ast;
+                                continue;
                             }
                             _ => (),
                         };
