@@ -220,10 +220,7 @@ pub fn apply_try(args: &[MalObject], env: &Rc<Environment>) -> Result<EvalContex
         Ok(ast) => Ok((ast, env.clone())),
         Err(original) => {
             let exception_env = Environment::spawn_from(env);
-            exception_env.set(
-                exception_name.clone(),
-                MalObject::String(format!("{}", original).into()),
-            );
+            exception_env.set(exception_name.clone(), MalObject::from(&original));
             match EVAL(&catch[2], &exception_env) {
                 Ok(obj) => Ok((obj, env.clone())),
                 Err(then) => Err(Error::InCatchHandler(ErrorDuringCatch {

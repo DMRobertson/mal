@@ -43,6 +43,12 @@ pub(crate) fn pr_str(object: &MalObject, mode: PrintMode) -> String {
             output.push(']');
             output
         }
+        MalObject::Map(x) => {
+            let mut output: String = "{".into();
+            write_map(&mut output, x, mode).unwrap();
+            output.push('}');
+            output
+        }
         _ => format!("{}", object),
     }
 }
@@ -85,6 +91,22 @@ fn write_sequence(f: &mut impl fmt::Write, seq: &[MalObject], mode: PrintMode) -
     let mut iter = seq.iter().peekable();
     while let Some(obj) = iter.next() {
         write!(f, "{}", pr_str(obj, mode))?;
+        if iter.peek().is_some() {
+            write!(f, " ")?;
+        }
+    }
+    Ok(())
+}
+
+fn write_map(f: &mut impl fmt::Write, map: &types::MalMap, mode: PrintMode) -> fmt::Result {
+    let mut iter = map.iter().peekable();
+    while let Some((key, value)) = iter.next() {
+        write!(
+            f,
+            "{} {}",
+            pr_str(&key.into_mal_object(), mode),
+            pr_str(value, mode)
+        )?;
         if iter.peek().is_some() {
             write!(f, " ")?;
         }

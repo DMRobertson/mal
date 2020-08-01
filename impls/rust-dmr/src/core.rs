@@ -623,6 +623,15 @@ fn vals_(args: &[MalObject]) -> evaluator::Result {
     Ok(MalObject::wrap_list(vals))
 }
 
+const THROW: PrimitiveFn = PrimitiveFn {
+    name: "throw",
+    fn_ptr: throw_,
+    arity: Arity::exactly(1),
+};
+fn throw_(args: &[MalObject]) -> evaluator::Result {
+    Err(evaluator::Error::UserException(args[0].clone()))
+}
+
 type Namespace = HashMap<&'static str, &'static PrimitiveFn>;
 lazy_static! {
     pub static ref CORE: Namespace = {
@@ -684,6 +693,8 @@ lazy_static! {
             KEYWORD,
             KEYWORD_TEST,
             MAP_TEST,
+            // Exceptions
+            THROW,
         ].iter() {
             map.insert(func.name, func);
         }

@@ -28,6 +28,7 @@ pub enum Error {
     // TODO the arrangement of all these errors needs a rethink IMO!
     ReadError(reader::Error),
     IOError(std::io::Error),
+    UserException(MalObject),
 }
 
 #[derive(Debug)]
@@ -38,9 +39,8 @@ pub struct ErrorDuringCatch {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Evaluation error: ")?;
         match self {
-            Error::UnknownSymbol(UnknownSymbol(s)) => write!(f, "symbol {} not found", s),
+            Error::UnknownSymbol(UnknownSymbol(s)) => write!(f, "'{}' not found", s),
             Error::ListHeadNotSymbol => {
                 write!(f, "cannot apply list whose first entry is not a symbol")
             }
@@ -62,6 +62,7 @@ impl fmt::Display for Error {
                 "{}\nWhile handling the above exception, another exception occurred: {}",
                 e.original, e.then
             ),
+            Error::UserException(e) => write!(f, "UserException: {}", e),
         }
     }
 }
@@ -72,9 +73,12 @@ impl From<types::TypeMismatch> for Error {
     }
 }
 
-impl From<Error> for MalObject {
-    fn from(e: Error) -> Self {
-        MalObject::String(format!("Exception: {}", e))
+impl From<&Error> for MalObject {
+    fn from(e: &Error) -> Self {
+        match e {
+            Error::UserException(obj) => obj.clone(),
+            _ => MalObject::String(format!("{}", e)),
+        }
     }
 }
 
