@@ -413,6 +413,24 @@ impl MalObject {
             _ => false,
         }
     }
+    pub(crate) fn is_string(&self) -> bool {
+        match self {
+            MalObject::String(_) => true,
+            _ => false,
+        }
+    }
+    pub(crate) fn is_number(&self) -> bool {
+        match self {
+            MalObject::Integer(_) => true,
+            _ => false,
+        }
+    }
+    pub(crate) fn is_macro(&self) -> bool {
+        match self {
+            MalObject::Closure(f) => f.is_macro,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]

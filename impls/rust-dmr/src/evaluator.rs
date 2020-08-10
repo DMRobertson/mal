@@ -73,6 +73,12 @@ impl From<types::TypeMismatch> for Error {
     }
 }
 
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Self {
+        Self::IOError(e)
+    }
+}
+
 impl From<&Error> for MalObject {
     fn from(e: &Error) -> Self {
         match e {

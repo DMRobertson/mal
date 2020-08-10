@@ -3,9 +3,11 @@ use crate::types::{
 };
 use crate::{evaluator, printer, reader, types};
 use itertools::Itertools;
+use linefeed::{DefaultTerminal, Interface, ReadResult};
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fs::read_to_string;
+use std::time::SystemTime;
 
 fn grab_ints(args: &[MalObject]) -> evaluator::Result<Vec<MalInt>> {
     let type_check: Result<Vec<_>, _> = args.iter().map(|o| o.as_int()).collect();
@@ -533,6 +535,57 @@ fn map_(args: &[MalObject]) -> evaluator::Result {
     Ok(MalObject::wrap_list(result?))
 }
 
+const SEQ: PrimitiveFn = PrimitiveFn {
+    name: "seq",
+    fn_ptr: seq_,
+    arity: Arity::exactly(1),
+};
+fn seq_(args: &[MalObject]) -> evaluator::Result {
+    use MalObject::*;
+    match &args[0] {
+        String(x) if x.is_empty() => return Ok(Nil),
+        List(x) if x.payload.is_empty() => return Ok(Nil),
+        Vector(x) if x.payload.is_empty() => return Ok(Nil),
+        _ => {}
+    }
+
+    match &args[0] {
+        Nil => Ok(Nil),
+        String(s) => Ok(MalObject::wrap_list(
+            s.chars()
+                .map(|substr| MalObject::String(substr.to_string()))
+                .collect(),
+        )),
+        List(_) => Ok(args[0].clone()),
+        Vector(x) => Ok(MalObject::wrap_list(x.0.clone())),
+        _ => Err(evaluator::Error::TypeMismatch(TypeMismatch::NotASequence)),
+    }
+}
+
+const CONJ: PrimitiveFn = PrimitiveFn {
+    name: "conj",
+    fn_ptr: conj_,
+    arity: Arity::at_least(2),
+};
+fn conj_(args: &[MalObject]) -> evaluator::Result {
+    let old = args[0].as_seq()?;
+    let new = &args[1..];
+    match &args[0] {
+        MalObject::List(_) => {
+            let mut result = new.to_vec();
+            result.reverse();
+            result.extend_from_slice(old);
+            Ok(MalObject::wrap_list(result))
+        }
+        MalObject::Vector(_) => {
+            let mut result = old.to_vec();
+            result.extend_from_slice(new);
+            Ok(MalObject::wrap_vector(result))
+        }
+        _ => unreachable!(),
+    }
+}
+
 const HASH_MAP: PrimitiveFn = PrimitiveFn {
     name: "hash-map",
     fn_ptr: hash_map,
@@ -632,6 +685,74 @@ fn throw_(args: &[MalObject]) -> evaluator::Result {
     Err(evaluator::Error::UserException(args[0].clone()))
 }
 
+const STRING_TEST: PrimitiveFn = PrimitiveFn {
+    name: "string?",
+    fn_ptr: string_test,
+    arity: Arity::exactly(1),
+};
+fn string_test(args: &[MalObject]) -> evaluator::Result {
+    Ok(MalObject::Bool(args[0].is_string()))
+}
+
+const NUMBER_TEST: PrimitiveFn = PrimitiveFn {
+    name: "number?",
+    fn_ptr: number_test,
+    arity: Arity::exactly(1),
+};
+fn number_test(args: &[MalObject]) -> evaluator::Result {
+    Ok(MalObject::Bool(args[0].is_number()))
+}
+
+const FUNCTION_TEST: PrimitiveFn = PrimitiveFn {
+    name: "fn?",
+    fn_ptr: function_test,
+    arity: Arity::exactly(1),
+};
+fn function_test(args: &[MalObject]) -> evaluator::Result {
+    Ok(MalObject::Bool(callable(&args[0]) && !args[0].is_macro()))
+}
+
+const MACRO_TEST: PrimitiveFn = PrimitiveFn {
+    name: "macro?",
+    fn_ptr: macro_test,
+    arity: Arity::exactly(1),
+};
+fn macro_test(args: &[MalObject]) -> evaluator::Result {
+    Ok(MalObject::Bool(args[0].is_macro()))
+}
+
+const READLINE: PrimitiveFn = PrimitiveFn {
+    name: "readline",
+    fn_ptr: readline_,
+    arity: Arity::exactly(1),
+};
+fn readline_(args: &[MalObject]) -> evaluator::Result {
+    let prompt = args[0].as_string()?;
+    lazy_static! {
+        pub static ref INTERFACE: Interface<DefaultTerminal> =
+            linefeed::Interface::new("mal_user").unwrap();
+    }
+    INTERFACE.set_prompt(prompt)?;
+    match INTERFACE.read_line() {
+        Ok(ReadResult::Eof) => Ok(MalObject::Nil),
+        Ok(ReadResult::Signal(_)) => Ok(MalObject::Nil),
+        Ok(ReadResult::Input(i)) => Ok(MalObject::String(i)),
+        Err(e) => Err(e.into()),
+    }
+}
+
+const TIME_MS: PrimitiveFn = PrimitiveFn {
+    name: "time-ms",
+    fn_ptr: time_ms_,
+    arity: Arity::exactly(0),
+};
+fn time_ms_(_args: &[MalObject]) -> evaluator::Result {
+    let duration = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap(); // TODO really ought not to hide this!
+    Ok(MalObject::Integer(duration.as_millis() as MalInt))
+}
+
 type Namespace = HashMap<&'static str, &'static PrimitiveFn>;
 lazy_static! {
     pub static ref CORE: Namespace = {
@@ -662,6 +783,8 @@ lazy_static! {
             REST,
             APPLY,
             MAP,
+            SEQ,
+            CONJ,
             // Working with maps
             HASH_MAP,
             ASSOC,
@@ -674,7 +797,7 @@ lazy_static! {
             DEREF,
             RESET,
             SWAP,
-            // Casting
+            // Casting and testing
             NIL_TEST,
             TRUE_TEST,
             FALSE_TEST,
@@ -693,8 +816,15 @@ lazy_static! {
             KEYWORD,
             KEYWORD_TEST,
             MAP_TEST,
+            FUNCTION_TEST,
+            MACRO_TEST,
+            STRING_TEST,
+            NUMBER_TEST,
             // Exceptions
             THROW,
+            // Other
+            READLINE,
+            TIME_MS,
         ].iter() {
             map.insert(func.name, func);
         }
