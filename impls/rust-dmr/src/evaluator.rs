@@ -158,7 +158,7 @@ pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
                             _ => (),
                         };
                     };
-                    let evaluated = evaluate_sequence_elementwise(&*argv, &env)?;
+                    let evaluated = evaluate_sequence_elementwise(argv, &env)?;
                     let (callable, args) = evaluated.split_first().unwrap();
                     match apply(callable, args)? {
                         ApplyOutcome::Finished(obj) => return Ok(obj),
