@@ -12,7 +12,6 @@ pub fn run<F>(rep: F) -> std::io::Result<()>
 where
     F: Fn(&str) -> printer::Result,
 {
-    pretty_env_logger::init();
     let interface = setup()?;
     let processor = |line: &str| rep(line);
     rep("(println (str \"Mal [\" *host-language* \"]\"))").unwrap();
@@ -117,7 +116,7 @@ pub enum Error {
 }
 
 fn process_argv(args: &[String]) -> Mode {
-    log::debug!("Batch mode, args={:?}", args);
+    log::debug!("command line args={:?}", args);
     match args {
         [] | [_] => Mode::Repl,
         [_program_name, file_path, ..] => Mode::Batch(file_path.clone()),

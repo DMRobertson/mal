@@ -12,5 +12,6 @@ fn rep(line: &str) -> printer::Result {
 }
 
 fn main() -> std::io::Result<()> {
+    pretty_env_logger::init();
     cmdline::run(rep)
 }
