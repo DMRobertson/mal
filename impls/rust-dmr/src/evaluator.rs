@@ -1,7 +1,7 @@
 use crate::environment::{Environment, UnknownSymbol};
 use crate::evaluator::ApplyOutcome::EvaluateFurther;
 use crate::types::{
-    Arity, Closure, MalMap, MalObject, MalSymbol, PrimitiveEval, PrimitiveFn, TypeMismatch,
+    Arity, Closure, MalMap, MalObject, MalSymbol, PrimitiveEval, PrimitiveFnRef, TypeMismatch,
 };
 use crate::{environment, reader, special_forms, types};
 
@@ -99,58 +99,62 @@ pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
         ast = macroexpand(&ast, &env)?;
         log::debug!("macroexpand produced {}", ast);
         match &ast {
-            List(argv) => match argv.len() {
+            List(argv) => match argv.payload.len() {
                 0 => return Ok(MalObject::new_list()),
                 _ => {
-                    log::debug!("apply {}", argv);
-                    if let Symbol(name) = &argv[0] {
+                    log::debug!("apply ({})", &ast);
+                    if let Symbol(name) = &argv.payload[0] {
                         match name.as_str() {
-                            "def!" => return special_forms::apply_def(&argv[1..], &env, false),
-                            "defmacro!" => return special_forms::apply_def(&argv[1..], &env, true),
+                            "def!" => {
+                                return special_forms::apply_def(&argv.payload[1..], &env, false)
+                            }
+                            "defmacro!" => {
+                                return special_forms::apply_def(&argv.payload[1..], &env, true)
+                            }
                             "let*" => {
                                 let (new_ast, new_env) =
-                                    special_forms::apply_let(&argv[1..], &env)?;
+                                    special_forms::apply_let(&argv.payload[1..], &env)?;
                                 env = new_env;
                                 ast = new_ast;
                                 continue;
                             }
                             "do" => {
-                                ast = special_forms::apply_do(&argv[1..], &env)?;
+                                ast = special_forms::apply_do(&argv.payload[1..], &env)?;
                                 continue;
                             }
                             "if" => {
-                                ast = special_forms::apply_if(&argv[1..], &env)?;
+                                ast = special_forms::apply_if(&argv.payload[1..], &env)?;
                                 continue;
                             }
-                            "fn*" => return special_forms::apply_fn(&argv[1..], &env),
+                            "fn*" => return special_forms::apply_fn(&argv.payload[1..], &env),
                             // Any other initial symbol will be interpreted a a function call and
                             // handled below
                             "quote" => {
                                 Arity::exactly(1)
-                                    .validate_for(argv[1..].len(), "quote")
+                                    .validate_for(argv.payload[1..].len(), "quote")
                                     .map_err(Error::BadArgCount)?;
-                                return Ok(argv[1].clone());
+                                return Ok(argv.payload[1].clone());
                             }
                             "quasiquote" => {
                                 Arity::exactly(1)
-                                    .validate_for(argv[1..].len(), "quasiquote")
+                                    .validate_for(argv.payload[1..].len(), "quasiquote")
                                     .map_err(Error::BadArgCount)?;
-                                ast = special_forms::apply_quasiquote(&argv[1])
+                                ast = special_forms::apply_quasiquote(&argv.payload[1])
                                     .map_err(Error::BadArgCount)?;
                                 continue;
                             }
                             "macroexpand" => {
                                 Arity::exactly(1)
-                                    .validate_for(argv[1..].len(), "macroexpand")
+                                    .validate_for(argv.payload[1..].len(), "macroexpand")
                                     .map_err(Error::BadArgCount)?;
-                                return macroexpand(&argv[1], &env);
+                                return macroexpand(&argv.payload[1], &env);
                             }
                             "try*" => {
                                 Arity::Between(1..=2)
-                                    .validate_for(argv[1..].len(), "try*")
+                                    .validate_for(argv.payload[1..].len(), "try*")
                                     .map_err(Error::BadArgCount)?;
                                 let (new_ast, new_env) =
-                                    special_forms::apply_try(&argv[1..], &env)?;
+                                    special_forms::apply_try(&argv.payload[1..], &env)?;
                                 env = new_env;
                                 ast = new_ast;
                                 continue;
@@ -158,7 +162,7 @@ pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
                             _ => (),
                         };
                     };
-                    let evaluated = evaluate_sequence_elementwise(argv, &env)?;
+                    let evaluated = evaluate_sequence_elementwise(&argv.payload, &env)?;
                     let (callable, args) = evaluated.split_first().unwrap();
                     match apply(callable, args)? {
                         ApplyOutcome::Finished(obj) => return Ok(obj),
@@ -226,9 +230,11 @@ pub(crate) fn evaluate_ast(ast: &MalObject, env: &Rc<Environment>) -> Result {
     log::trace!("evaluate_ast {:?}", ast);
     match ast {
         MalObject::Symbol(s) => env.fetch(s).map_err(Error::UnknownSymbol),
-        MalObject::List(list) => evaluate_sequence_elementwise(list, env).map(MalObject::wrap_list),
+        MalObject::List(list) => {
+            evaluate_sequence_elementwise(&list.payload, env).map(MalObject::wrap_list)
+        }
         MalObject::Vector(vec) => {
-            evaluate_sequence_elementwise(vec, env).map(MalObject::wrap_vector)
+            evaluate_sequence_elementwise(&vec.payload, env).map(MalObject::wrap_vector)
         }
         MalObject::Map(map) => evaluate_map(map, env),
         _ => Ok(ast.clone()),
@@ -236,12 +242,12 @@ pub(crate) fn evaluate_ast(ast: &MalObject, env: &Rc<Environment>) -> Result {
 }
 
 fn evaluate_map(map: &MalMap, env: &Rc<Environment>) -> Result {
-    let mut evaluated = MalMap(HashMap::new());
-    for (key, old_value) in map.iter() {
+    let mut evaluated = HashMap::new();
+    for (key, old_value) in map.payload.iter() {
         let new_value = EVAL(old_value, env)?;
         evaluated.insert(key.clone(), new_value);
     }
-    Ok(MalObject::Map(Rc::new(evaluated)))
+    Ok(MalObject::wrap_map(evaluated))
 }
 
 pub fn evaluate_sequence_elementwise(
@@ -253,7 +259,8 @@ pub fn evaluate_sequence_elementwise(
     mapped
 }
 
-pub fn call_primitive(func: &'static PrimitiveFn, args: &[MalObject]) -> Result {
+pub fn call_primitive(func: &PrimitiveFnRef, args: &[MalObject]) -> Result {
+    let func = func.payload;
     log::debug!("Call {} with {:?}", func.name, args);
     func.arity
         .validate_for(args.len(), func.name)
@@ -285,8 +292,8 @@ fn is_macro_call<'a>(ast: &'a MalObject, env: &Environment) -> Option<&'a MalSym
     let symbol = ast
         .as_list()
         .ok()
-        .filter(|seq| !seq.is_empty())
-        .map(|seq| seq[0].as_symbol().ok())
+        .filter(|seq| !seq.payload.is_empty())
+        .map(|seq| seq.payload[0].as_symbol().ok())
         .flatten();
     let value = symbol.map(|sym| env.get(sym)).flatten();
     let is_macro = value
@@ -305,7 +312,7 @@ fn macroexpand(ast: &MalObject, env: &Rc<Environment>) -> Result {
     while let Some(symbol) = is_macro_call(&ast, &env) {
         log::debug!("macroexpand: env={}", env);
         let closure = env.get(symbol).unwrap();
-        ast = apply_fully(&closure, &ast.as_list().unwrap()[1..])?;
+        ast = apply_fully(&closure, &ast.as_list().unwrap().payload[1..])?;
     }
     Ok(ast)
 }

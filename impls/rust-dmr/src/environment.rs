@@ -1,4 +1,4 @@
-use crate::types::{MalObject, MalSymbol, PrimitiveEval};
+use crate::types::{MalObject, MalSymbol, PrimitiveEval, PrimitiveFnRef};
 use crate::{core, interpreter, prelude};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -66,7 +66,13 @@ impl Environment {
     pub fn default() -> Self {
         let mut data = HashMap::new();
         for (&name, &func) in core::CORE.iter() {
-            data.insert(MalSymbol(name.into()), MalObject::Primitive(func));
+            data.insert(
+                MalSymbol(name.into()),
+                MalObject::Primitive(PrimitiveFnRef {
+                    payload: func,
+                    meta: Box::new(MalObject::Nil),
+                }),
+            );
         }
         data.insert(
             MalSymbol("*host-language*".into()),

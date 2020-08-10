@@ -152,6 +152,7 @@ pub fn apply_fn(args: &[MalObject], env: &Rc<Environment>) -> Result {
         body: body.clone(),
         parent: env.clone(),
         is_macro: false,
+        meta: MalObject::Nil,
     };
     Ok(MalObject::Closure(Rc::new(closure)))
 }
@@ -203,7 +204,7 @@ pub fn apply_try(args: &[MalObject], env: &Rc<Environment>) -> Result<EvalContex
     let ast = &args[0];
     let catch = args.get(1);
     let catch_data = catch.map(|obj| -> Result<_> {
-        let data = obj.as_list()?;
+        let data = &obj.as_list()?.payload;
         Arity::exactly(3)
             .validate_for(data.len(), "try* catch list")
             .map_err(Error::BadArgCount)?;

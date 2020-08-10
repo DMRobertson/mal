@@ -7,6 +7,8 @@ use linefeed::{DefaultTerminal, Interface, ReadResult};
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fs::read_to_string;
+use std::ops::Deref;
+use std::rc::Rc;
 use std::time::SystemTime;
 
 fn grab_ints(args: &[MalObject]) -> evaluator::Result<Vec<MalInt>> {
@@ -165,8 +167,8 @@ const COUNT: PrimitiveFn = PrimitiveFn {
 
 fn count_(args: &[MalObject]) -> evaluator::Result {
     match &args[0] {
-        MalObject::List(list) => Ok(list.len() as MalInt),
-        MalObject::Vector(vec) => Ok(vec.len() as MalInt),
+        MalObject::List(list) => Ok(list.payload.len() as MalInt),
+        MalObject::Vector(vec) => Ok(vec.payload.len() as MalInt),
         MalObject::Nil => Ok(0 as MalInt),
         _ => Err(evaluator::Error::TypeMismatch(
             // TODO better error here!
@@ -557,7 +559,7 @@ fn seq_(args: &[MalObject]) -> evaluator::Result {
                 .collect(),
         )),
         List(_) => Ok(args[0].clone()),
-        Vector(x) => Ok(MalObject::wrap_list(x.0.clone())),
+        Vector(x) => Ok(MalObject::wrap_list(x.payload.clone())),
         _ => Err(evaluator::Error::TypeMismatch(TypeMismatch::NotASequence)),
     }
 }
@@ -753,6 +755,67 @@ fn time_ms_(_args: &[MalObject]) -> evaluator::Result {
     Ok(MalObject::Integer(duration.as_millis() as MalInt))
 }
 
+const META: PrimitiveFn = PrimitiveFn {
+    name: "meta",
+    fn_ptr: meta_,
+    arity: Arity::exactly(1),
+};
+fn meta_(args: &[MalObject]) -> evaluator::Result {
+    /* TODO Duplication here. Is there a better way?
+       Could define
+           struct<T> Meta { payload: T, meta: MalObject }
+       to save some boilerplate in the definitions of MalList, MalVector, MalMap, etc
+       But I don't think this would help here.
+       Or maybe I can define a "Metadata" trait and use that somehow?
+    */
+    match &args[0] {
+        MalObject::Primitive(x) => Ok(*x.meta.clone()),
+        MalObject::Closure(x) => Ok(x.meta.clone()),
+        MalObject::List(x) => Ok(x.meta.clone()),
+        MalObject::Vector(x) => Ok(x.meta.clone()),
+        MalObject::Map(x) => Ok(x.meta.clone()),
+        _ => Err(TypeMismatch::CantHoldMetadata.into()),
+    }
+}
+
+const WITH_META: PrimitiveFn = PrimitiveFn {
+    name: "with-meta",
+    fn_ptr: with_meta_,
+    arity: Arity::exactly(2),
+};
+fn with_meta_(args: &[MalObject]) -> evaluator::Result {
+    let src = &args[0];
+    let new_meta = args[1].clone();
+    match src {
+        MalObject::List(list) => {
+            let mut output = (**list).clone();
+            output.meta = new_meta;
+            Ok(MalObject::List(Rc::new(output)))
+        }
+        MalObject::Vector(vec) => {
+            let mut output = (**vec).clone();
+            output.meta = new_meta;
+            Ok(MalObject::Vector(Rc::new(output)))
+        }
+        MalObject::Map(map) => {
+            let mut output = (**map).clone();
+            output.meta = new_meta;
+            Ok(MalObject::Map(Rc::new(output)))
+        }
+        MalObject::Primitive(func) => {
+            let mut func = func.clone();
+            func.meta = Box::new(args[1].clone());
+            Ok(MalObject::Primitive(func))
+        }
+        MalObject::Closure(func) => {
+            let mut func = func.deref().clone();
+            func.meta = args[1].clone();
+            Ok(MalObject::Closure(Rc::new(func)))
+        }
+        _ => Err(TypeMismatch::CantHoldMetadata.into()),
+    }
+}
+
 type Namespace = HashMap<&'static str, &'static PrimitiveFn>;
 lazy_static! {
     pub static ref CORE: Namespace = {
@@ -820,6 +883,9 @@ lazy_static! {
             MACRO_TEST,
             STRING_TEST,
             NUMBER_TEST,
+            // Metadata
+            META,
+            WITH_META,
             // Exceptions
             THROW,
             // Other

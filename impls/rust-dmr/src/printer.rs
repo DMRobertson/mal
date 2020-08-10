@@ -33,13 +33,13 @@ pub(crate) fn pr_str(object: &MalObject, mode: PrintMode) -> String {
         MalObject::String(payload) => print_as_string(payload, mode),
         MalObject::List(x) => {
             let mut output: String = "(".into();
-            write_sequence(&mut output, x, mode).unwrap();
+            write_sequence(&mut output, &x.payload, mode).unwrap();
             output.push(')');
             output
         }
         MalObject::Vector(x) => {
             let mut output: String = "[".into();
-            write_sequence(&mut output, x, mode).unwrap();
+            write_sequence(&mut output, &x.payload, mode).unwrap();
             output.push(']');
             output
         }
@@ -99,7 +99,7 @@ fn write_sequence(f: &mut impl fmt::Write, seq: &[MalObject], mode: PrintMode) -
 }
 
 fn write_map(f: &mut impl fmt::Write, map: &types::MalMap, mode: PrintMode) -> fmt::Result {
-    let mut iter = map.iter().peekable();
+    let mut iter = map.payload.iter().peekable();
     while let Some((key, value)) = iter.next() {
         write!(
             f,
@@ -117,7 +117,7 @@ fn write_map(f: &mut impl fmt::Write, map: &types::MalMap, mode: PrintMode) -> f
 impl fmt::Display for types::MalList {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "(")
-            .and_then(|_| write_sequence(f, self, PrintMode::ReadableRepresentation))
+            .and_then(|_| write_sequence(f, &self.payload, PrintMode::ReadableRepresentation))
             .and_then(|_| write!(f, ")"))
     }
 }
@@ -125,7 +125,7 @@ impl fmt::Display for types::MalList {
 impl fmt::Display for types::MalVector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "[")
-            .and_then(|_| write_sequence(f, self, PrintMode::ReadableRepresentation))
+            .and_then(|_| write_sequence(f, &self.payload, PrintMode::ReadableRepresentation))
             .and_then(|_| write!(f, "]"))
     }
 }
@@ -133,7 +133,7 @@ impl fmt::Display for types::MalVector {
 impl fmt::Display for types::MalMap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{{")?;
-        let mut iter = self.iter().peekable();
+        let mut iter = self.payload.iter().peekable();
         while let Some((key, value)) = iter.next() {
             match key {
                 HashKey::String(s) => write!(
@@ -166,7 +166,7 @@ impl fmt::Display for MalObject {
             List(x) => write!(f, "{}", x),
             Vector(x) => write!(f, "{}", x),
             Map(x) => write!(f, "{}", x),
-            Primitive(x) => write!(f, "{}", x.name),
+            Primitive(x) => write!(f, "{}", x.payload.name),
             Closure(x) => write!(f, "{}", x),
             Eval(_) => write!(f, "eval"),
             Atom(x) => write!(f, "{}", x),

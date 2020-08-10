@@ -3,7 +3,7 @@ use crate::environment::Environment;
 use crate::strings::BuildError;
 use crate::tokens::StringLiteral;
 use crate::{evaluator, strings};
-use derive_more::{Deref, DerefMut};
+use derive_more::Deref;
 use itertools::Itertools;
 use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
@@ -13,13 +13,23 @@ use std::ops::{RangeFrom, RangeInclusive};
 use std::rc::Rc;
 use std::{fmt, rc};
 
-#[derive(Deref, DerefMut, Debug)]
-pub struct MalList(pub Vec<MalObject>);
-#[derive(Deref, DerefMut, Debug)]
-pub struct MalVector(pub Vec<MalObject>);
+#[derive(Debug, Clone)]
+pub struct MalList {
+    pub payload: Vec<MalObject>,
+    pub meta: MalObject,
+}
+#[derive(Debug, Clone)]
+pub struct MalVector {
+    pub payload: Vec<MalObject>,
+    pub meta: MalObject,
+}
 
-#[derive(Clone, Deref, DerefMut, Debug)]
-pub struct MalMap(pub HashMap<HashKey, MalObject>);
+type MalMapInternal = HashMap<HashKey, MalObject>;
+#[derive(Clone, Debug)]
+pub struct MalMap {
+    pub payload: MalMapInternal,
+    pub meta: MalObject,
+}
 pub type MalInt = isize;
 
 #[derive(Deref, Debug, PartialEq, Eq, Hash, Clone)]
@@ -115,6 +125,12 @@ impl fmt::Debug for PrimitiveFn {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct PrimitiveFnRef {
+    pub payload: &'static PrimitiveFn,
+    pub meta: Box<MalObject>,
+}
+
 #[derive(Clone)]
 pub struct PrimitiveEval {
     pub env: rc::Weak<Environment>,
@@ -194,6 +210,7 @@ pub struct Closure {
     pub body: MalObject,
     pub parent: Rc<Environment>,
     pub is_macro: bool,
+    pub meta: MalObject,
 }
 
 impl fmt::Debug for Closure {
@@ -244,7 +261,7 @@ pub enum MalObject {
     List(Rc<MalList>),
     Vector(Rc<MalVector>),
     Map(Rc<MalMap>),
-    Primitive(&'static PrimitiveFn),
+    Primitive(PrimitiveFnRef),
     Closure(Rc<Closure>),
     Eval(PrimitiveEval),
     Atom(Atom),
@@ -291,6 +308,7 @@ pub enum TypeMismatch {
     NotABool,
     NotAMap,
     NotAValidKey,
+    CantHoldMetadata,
 }
 
 impl MalObject {
@@ -310,15 +328,15 @@ impl MalObject {
 
     pub(crate) fn as_seq(&self) -> Result<&[MalObject], TypeMismatch> {
         match self {
-            MalObject::List(x) => Ok(x),
-            MalObject::Vector(x) => Ok(x),
+            MalObject::List(x) => Ok(&x.payload),
+            MalObject::Vector(x) => Ok(&x.payload),
             _ => Err(TypeMismatch::NotASequence),
         }
     }
 
-    pub(crate) fn as_map(&self) -> Result<&MalMap, TypeMismatch> {
+    pub(crate) fn as_map(&self) -> Result<&MalMapInternal, TypeMismatch> {
         match self {
-            MalObject::Map(x) => Ok(x),
+            MalObject::Map(x) => Ok(&x.payload),
             _ => Err(TypeMismatch::NotAMap),
         }
     }
@@ -459,14 +477,14 @@ pub(crate) fn build_map(entries: Vec<MalObject>) -> Result<MalObject, MapError> 
     if entries.len() % 2 == 1 {
         return Err(MapError::MissingValue);
     }
-    let mut map = MalMap(HashMap::new());
+    let mut map = HashMap::new();
     for (key, value) in entries.into_iter().tuples() {
         // TODO: get rid of these small errors like MapError. Let's have one larger error type used everywhere?
         let key = key.as_hashkey().map_err(|_| MapError::UnhashableKey)?;
         map.insert(key, value);
         // TODO detect duplicate keys?
     }
-    Ok(MalObject::Map(Rc::new(map)))
+    Ok(MalObject::wrap_map(map))
 }
 
 pub(crate) fn build_keyword(chars: &str) -> MalObject {
@@ -479,16 +497,25 @@ pub(crate) fn build_string(src: &StringLiteral) -> Result<MalObject, BuildError>
 
 impl MalObject {
     pub(crate) fn new_list() -> Self {
-        Self::List(Rc::new(MalList(Vec::new())))
+        Self::wrap_list(Vec::new())
     }
     pub(crate) fn wrap_list(elements: Vec<MalObject>) -> Self {
-        Self::List(Rc::new(MalList(elements)))
+        Self::List(Rc::new(MalList {
+            payload: elements,
+            meta: MalObject::Nil,
+        }))
     }
-    pub(crate) fn wrap_map(map: MalMap) -> Self {
-        Self::Map(Rc::new(map))
+    pub(crate) fn wrap_map(map: MalMapInternal) -> Self {
+        Self::Map(Rc::new(MalMap {
+            payload: map,
+            meta: MalObject::Nil,
+        }))
     }
     pub(crate) fn wrap_vector(elements: Vec<MalObject>) -> Self {
-        Self::Vector(Rc::new(MalVector(elements)))
+        Self::Vector(Rc::new(MalVector {
+            payload: elements,
+            meta: MalObject::Nil,
+        }))
     }
     pub(crate) fn new_symbol(name: &str) -> Self {
         Self::Symbol(MalSymbol(name.into()))
@@ -526,7 +553,11 @@ fn equal_sequences(xs: &[MalObject], ys: &[MalObject]) -> bool {
 }
 
 fn equal_maps(xs: &MalMap, ys: &MalMap) -> bool {
-    xs.0.len() == ys.0.len() && xs.iter().all(|(key, value)| ys.get(key) == Some(value))
+    xs.payload.len() == ys.payload.len()
+        && xs
+            .payload
+            .iter()
+            .all(|(key, value)| ys.payload.get(key) == Some(value))
 }
 
 impl Eq for MalObject {}
