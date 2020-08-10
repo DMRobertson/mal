@@ -13,7 +13,7 @@ function test {
 if [ "$#" -eq 0 ] ; then
 	TOTAL_STEPS=$(ls -1 "src/bin" | wc -l)
 	for ((i=0; i<TOTAL_STEPS; i++)) ; do
-		test "$i" || exit 1
+		test $(printf "%X" "$i") || exit 1
 	done
 	echo -e "${FG_BOLD_BRIGHT_GREEN}NOICE${FG_RESET}" > /dev/stderr
 elif [ "$#" -eq 1 ] ; then
