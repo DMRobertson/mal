@@ -68,6 +68,10 @@ impl Environment {
         for (&name, &func) in core::CORE.iter() {
             data.insert(MalSymbol(name.into()), MalObject::Primitive(func));
         }
+        data.insert(
+            MalSymbol("*host-language*".into()),
+            MalObject::String("rust-dmr".into()),
+        );
         Self {
             data: RefCell::new(data),
             parent: None,

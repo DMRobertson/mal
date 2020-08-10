@@ -15,6 +15,7 @@ where
     pretty_env_logger::init();
     let interface = setup()?;
     let processor = |line: &str| rep(line);
+    rep("(println (str \"Mal [\" *host-language* \"]\"))").unwrap();
     repl(&interface, processor);
     save_history(&interface)?;
     Ok(())
