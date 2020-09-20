@@ -126,7 +126,9 @@ fn process_argv(args: &[String]) -> Mode {
 pub fn launch(mut args: Vec<String>, env: &Rc<Environment>) -> Result<(), Error> {
     let mode = process_argv(&args);
 
+    // Remove two args (rust binary name and mal file name) to get what Mal considers its argv
     let script_args = args.split_off(min(args.len(), 2));
+    log::debug!("Invoked with arguments {:?}", script_args);
     let script_args =
         MalObject::wrap_list(script_args.into_iter().map(MalObject::String).collect());
     env.set(MalSymbol("*ARGV*".into()), script_args);
