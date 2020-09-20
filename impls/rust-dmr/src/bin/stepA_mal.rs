@@ -1,3 +1,6 @@
+// rustc warns about the crate name here---no easy way to turn it off for the crate name only at present.
+// See https://github.com/rust-lang/rust/issues/45127
+
 use rust_dmr_mal::{cmdline, environment};
 use std::rc::Rc;
 
