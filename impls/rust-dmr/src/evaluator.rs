@@ -97,16 +97,21 @@ pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
     let mut env = orig_env.clone();
     loop {
         ast = macroexpand(&ast, &env)?;
-        log::debug!("macroexpand produced {}", ast);
+        log::trace!("macroexpand produced {}", ast);
         match &ast {
             List(argv) => match argv.payload.len() {
                 0 => return Ok(MalObject::new_list()),
                 _ => {
-                    log::debug!("apply ({})", &ast);
+                    log::trace!("apply ({})", &ast);
                     if let Symbol(name) = &argv.payload[0] {
                         match name.as_str() {
                             "def!" => {
-                                return special_forms::apply_def(&argv.payload[1..], &env, false)
+                                let result =
+                                    special_forms::apply_def(&argv.payload[1..], &env, false);
+                                if let Ok(value) = &result {
+                                    log::debug!("define {} as {}", argv.payload[1], value);
+                                }
+                                return result;
                             }
                             "defmacro!" => {
                                 return special_forms::apply_def(&argv.payload[1..], &env, true)
@@ -220,6 +225,7 @@ pub(crate) fn apply(callable: &MalObject, args: &[MalObject]) -> Result<ApplyOut
                 .validate_for(args.len(), "eval")
                 .map_err(Error::BadArgCount)?;
             let env = env.upgrade().expect("eval: env destroyed");
+            log::info!("Call from mal to EVAL with {}", args[0]);
             Ok(EvaluateFurther(args[0].clone(), env))
         }
         _ => Err(Error::TypeMismatch(TypeMismatch::NotCallable)),
@@ -261,17 +267,17 @@ pub fn evaluate_sequence_elementwise(
 
 pub fn call_primitive(func: &PrimitiveFnRef, args: &[MalObject]) -> Result {
     let func = func.payload;
-    log::debug!("Call {} with {:?}", func.name, args);
+    log::trace!("Call {} with {:?}", func.name, args);
     func.arity
         .validate_for(args.len(), func.name)
         .map_err(Error::BadArgCount)?;
     let result = (func.fn_ptr)(args);
-    log::debug!("Call to {} resulted in {:?}", func.name, result);
+    log::trace!("Call to {} resulted in {:?}", func.name, result);
     result
 }
 
 fn make_closure_env(func: &Closure, args: &[MalObject]) -> Result<Rc<Environment>> {
-    log::debug!("Call closure {} with {:?}", func, args);
+    log::trace!("Call closure {} with {:?}", func, args);
     func.parameters
         .arity()
         .validate_for(args.len(), "closure")
@@ -310,7 +316,7 @@ fn macroexpand(ast: &MalObject, env: &Rc<Environment>) -> Result {
     let mut ast = ast.clone();
     let env = env.clone();
     while let Some(symbol) = is_macro_call(&ast, &env) {
-        log::debug!("macroexpand: env={}", env);
+        log::trace!("macroexpand: env={}", env);
         let closure = env.get(symbol).unwrap();
         ast = apply_fully(&closure, &ast.as_list().unwrap().payload[1..])?;
     }

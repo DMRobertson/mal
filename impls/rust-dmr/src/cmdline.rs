@@ -92,7 +92,13 @@ where
                 match processor(&line) {
                     Ok(Outcome::String(s)) => writeln!(interface, "{}", s).ok(),
                     Ok(Outcome::Empty) => continue,
-                    Err(e) => writeln!(interface, "{}", styles.error.paint(e)).ok(),
+                    Err(e) => writeln!(
+                        interface,
+                        "processing {:?} yielded {}",
+                        line,
+                        styles.error.paint(e)
+                    )
+                    .ok(),
                 };
             }
             Err(e) => {

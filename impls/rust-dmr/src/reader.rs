@@ -45,11 +45,11 @@ pub type Result = std::result::Result<MalObject, Error>;
 
 pub fn read_str(input: &str) -> Result {
     let tokens = tokenize(input).map_err(Error::TokenizerError)?;
-    log::debug!("tokenize produced {:?}", tokens);
+    log::trace!("tokenize produced {:?}", tokens);
     let mut reader = tokens.iter().peekable();
     let result = read_form(&mut reader);
     if let Ok(obj) = &result {
-        log::debug!("read_form produced {}", obj);
+        log::trace!("read_form produced {}", obj);
     }
     result
 }
@@ -60,7 +60,7 @@ fn read_form(reader: &mut Reader) -> Result {
 
     loop {
         let token = reader.next().ok_or(Error::NoMoreTokens)?;
-        log::debug!("read_form, token={:?}", token);
+        log::trace!("read_form, token={:?}", token);
         return match token {
             Token::Open(List) => read_list(reader),
             Token::Open(Vector) => read_vector(reader),
@@ -99,11 +99,11 @@ fn read_sequence(
     reader: &mut Reader,
     closing_token: Close,
 ) -> std::result::Result<Vec<MalObject>, Error> {
-    log::debug!("read_sequence, looking for {:?}", closing_token);
+    log::trace!("read_sequence, looking for {:?}", closing_token);
     let mut elements = Vec::<MalObject>::new();
     // opening token already consumed
     loop {
-        log::debug!("read_sequence, token={:?}", reader.peek());
+        log::trace!("read_sequence, token={:?}", reader.peek());
         match reader.peek() {
             Some(Token::Close(c)) if *c == closing_token => {
                 reader.next();

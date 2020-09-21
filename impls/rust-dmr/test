@@ -4,21 +4,42 @@ ABS_PWD=$(readlink -e "$(pwd)")
 FG_BOLD_BRIGHT_RED="\e[1;91m"
 FG_BOLD_BRIGHT_GREEN="\e[1;92m"
 FG_RESET="\e[0;39m"
+IMPL="rust-dmr"
 
-function test {
-	pushd "$ABS_PWD/../../" || return 1
-	make "test^rust-dmr^step$1" || { echo -e "${FG_BOLD_BRIGHT_RED}step $1 failed${RESET}" > /dev/stderr; return 1; }
+function die() {
+  echo -e "${FG_BOLD_BRIGHT_RED}step $1 failed${FG_RESET}" >/dev/stderr
+  return 1
 }
 
-if [ "$#" -eq 0 ] ; then
-	TOTAL_STEPS=$(ls -1 "src/bin" | wc -l)
-	for ((i=0; i<TOTAL_STEPS; i++)) ; do
-		test $(printf "%X" "$i") || exit 1
-	done
-	echo -e "${FG_BOLD_BRIGHT_GREEN}NOICE${FG_RESET}" > /dev/stderr
-elif [ "$#" -eq 1 ] ; then
-	test "$1" || exit 1
+function selftest() {
+  make "build^$IMPL^stepA" || die "self hosting"
+  pushd impls/$IMPL || die "pushd"
+  for src in ../mal/step*.mal; do
+    # TODO is there a way to to this using the top level Makefile?
+    # Use our binary to run the mal-in-mal src code. That defines a repl, so ignore its stdio
+    # TODO why can't I feed /dev/null into this without it panicking?
+    "target/release/stepA_mal" "$src" || die "selftest read $src"
+  done
+}
+
+pushd "$ABS_PWD/../../" || {
+  echo "couldn't find mal root dir" >/dev/stderr
+  return 1
+}
+
+if [ "$#" -eq 0 ]; then
+  {
+    make "test^$IMPL" && selftest &&
+      echo -e "${FG_BOLD_BRIGHT_GREEN}NOICE${FG_RESET}" >/dev/stderr
+  } || exit 1
+elif [ "$#" -eq 1 ]; then
+  if [ "$1" == "self" ]; then
+    # selftest
+    make MAL_IMPL="$IMPL" "test^mal"
+  else
+    make "test^$IMPL^step$1" || exit 1
+  fi
 else
-	echo "Wrong number of arguments (got $#, expected 0 or 1" > /dev/stderr
-	exit 1
+  echo "Wrong number of arguments (got $#, expected 0 or 1)" >/dev/stderr
+  exit 1
 fi

@@ -242,6 +242,14 @@ fn read_string_(args: &[MalObject]) -> evaluator::Result {
     let string = args[0]
         .as_string()
         .map_err(evaluator::Error::TypeMismatch)?;
+    let mut lines = string.lines().take(2);
+    match lines.next() {
+        None => log::info!("Mal called read-string with empty string"),
+        Some(s) => match lines.next() {
+            None => log::info!("Mal called read-string with {:?}", s),
+            Some(_) => log::info!("Mal called read-string with {:?}...", s),
+        },
+    };
     reader::read_str(string).map_err(evaluator::Error::ReadError)
 }
 
