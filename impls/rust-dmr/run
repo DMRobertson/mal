@@ -1,2 +1,4 @@
 #!/bin/bash
-cargo run --quiet --release --bin ${STEP:-stepA_mal} "${@}" 2>/dev/null
+STEP=${STEP:-stepA_mal}
+cargo build --quiet --release --bin "$STEP" 2>/dev/null || exit 1
+"target/release/$STEP" "${@}"
