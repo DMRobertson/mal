@@ -265,19 +265,30 @@ pub fn evaluate_sequence_elementwise(
     mapped
 }
 
+pub(crate) fn pretty_print_args(args: &[MalObject]) -> String {
+    match args.len() {
+        0 => "no args".into(),
+        1 => args[0].to_string(),
+        _ => format!("\n\t{}", args.iter().join("\n\t")),
+    }
+}
+
 pub fn call_primitive(func: &PrimitiveFnRef, args: &[MalObject]) -> Result {
     let func = func.payload;
-    log::trace!("Call {} with {:?}", func.name, args);
     func.arity
         .validate_for(args.len(), func.name)
         .map_err(Error::BadArgCount)?;
+    log::trace!("Call {} with {}", func.name, pretty_print_args(args));
     let result = (func.fn_ptr)(args);
-    log::trace!("Call to {} resulted in {:?}", func.name, result);
+    match &result {
+        Ok(val) => log::trace!("Call to {} resulted in {}", func.name, val),
+        Err(e) => log::trace!("Call to {} failed: {}", func.name, e),
+    }
     result
 }
 
 fn make_closure_env(func: &Closure, args: &[MalObject]) -> Result<Rc<Environment>> {
-    log::trace!("Call closure {} with {:?}", func, args);
+    log::trace!("Call {} with {}", func, pretty_print_args(args));
     func.parameters
         .arity()
         .validate_for(args.len(), "closure")
