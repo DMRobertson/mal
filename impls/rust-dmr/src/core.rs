@@ -1,7 +1,7 @@
 use crate::types::{
     callable, Arity, Atom, HashKey, MalInt, MalObject, MapError, PrimitiveFn, TypeMismatch,
 };
-use crate::{evaluator, printer, reader, types};
+use crate::{environment, evaluator, printer, reader, types};
 use itertools::Itertools;
 use linefeed::{DefaultTerminal, Interface, ReadResult};
 use std::collections::HashMap;
@@ -824,6 +824,30 @@ fn with_meta_(args: &[MalObject]) -> evaluator::Result {
     }
 }
 
+const _RUST_LOG_LEVEL: PrimitiveFn = PrimitiveFn {
+    name: "-rust-log-level",
+    fn_ptr: _rust_log_level,
+    arity: Arity::exactly(1),
+};
+
+fn _rust_log_level(args: &[MalObject]) -> evaluator::Result {
+    let symbol = args[0].as_symbol()?;
+    let level = match symbol.as_ref() {
+        "off" => Ok(log::LevelFilter::Off),
+        "trace" => Ok(log::LevelFilter::Trace),
+        "debug" => Ok(log::LevelFilter::Debug),
+        "info" => Ok(log::LevelFilter::Info),
+        "warn" => Ok(log::LevelFilter::Warn),
+        "error" => Ok(log::LevelFilter::Error),
+        // TODO error type here is a bit of a hack. But the whole function is a bit of a hack!
+        _ => Err(evaluator::Error::UnknownSymbol(environment::UnknownSymbol(
+            symbol.clone(),
+        ))),
+    }?;
+    log::set_max_level(level);
+    Ok(MalObject::Nil)
+}
+
 type Namespace = HashMap<&'static str, &'static PrimitiveFn>;
 lazy_static! {
     pub static ref CORE: Namespace = {
@@ -899,6 +923,8 @@ lazy_static! {
             // Other
             READLINE,
             TIME_MS,
+            // Naughty!
+            _RUST_LOG_LEVEL,
         ].iter() {
             map.insert(func.name, func);
         }
