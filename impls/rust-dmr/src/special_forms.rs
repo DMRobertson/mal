@@ -110,9 +110,9 @@ pub fn apply_if(args: &[MalObject], env: &Rc<Environment>) -> Result {
         .map_err(Error::BadArgCount)?;
     let condition = EVAL(&args[0], env)?;
     if truthy(&condition) {
-        Ok(args[1].clone())
+        EVAL(&args[1], env)
     } else if args.len() == 3 {
-        Ok(args[2].clone())
+        EVAL(&args[2], env)
     } else {
         Ok(MalObject::Nil)
     }
