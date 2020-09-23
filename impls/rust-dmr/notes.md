@@ -1,3 +1,10 @@
+TODO
+====
+
+* `make perf^rust-dmr` runs `env STEP=stepA_mal MAL_IMPL=js ../rust-dmr/run ../tests/perf3.mal` from within the rust-dmr directory.
+This causes a stack overflow :(. Infinite recursion somewhere?
+
+
 My thoughts on implementing mal
 ===============================
 
