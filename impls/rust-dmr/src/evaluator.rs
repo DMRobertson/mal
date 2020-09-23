@@ -5,6 +5,8 @@ use crate::types::{
 };
 use crate::{environment, reader, special_forms, types};
 
+use itertools::Itertools;
+
 use std::collections::HashMap;
 use std::fmt;
 use std::ops::Range;
@@ -92,17 +94,18 @@ pub(crate) type EvalContext = (MalObject, Rc<Environment>);
 
 #[allow(non_snake_case)]
 pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
+    log::trace!("Call EVAL with {}", orig_ast);
     use MalObject::{List, Symbol};
     let mut ast = orig_ast.clone();
     let mut env = orig_env.clone();
-    loop {
+    let result = loop {
         ast = macroexpand(&ast, &env)?;
         log::trace!("macroexpand produced {}", ast);
         match &ast {
             List(argv) => match argv.payload.len() {
-                0 => return Ok(MalObject::new_list()),
+                0 => break Ok(MalObject::new_list()),
                 _ => {
-                    log::trace!("apply ({})", &ast);
+                    log::trace!("apply {}", &ast);
                     if let Symbol(name) = &argv.payload[0] {
                         match name.as_str() {
                             "def!" => {
@@ -111,34 +114,22 @@ pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
                                 if let Ok(value) = &result {
                                     log::debug!("define {} as {}", argv.payload[1], value);
                                 }
-                                return result;
+                                break result;
                             }
                             "defmacro!" => {
-                                return special_forms::apply_def(&argv.payload[1..], &env, true)
+                                break special_forms::apply_def(&argv.payload[1..], &env, true)
                             }
-                            "let*" => {
-                                let (new_ast, new_env) =
-                                    special_forms::apply_let(&argv.payload[1..], &env)?;
-                                env = new_env;
-                                ast = new_ast;
-                                continue;
-                            }
-                            "do" => {
-                                ast = special_forms::apply_do(&argv.payload[1..], &env)?;
-                                continue;
-                            }
-                            "if" => {
-                                ast = special_forms::apply_if(&argv.payload[1..], &env)?;
-                                continue;
-                            }
-                            "fn*" => return special_forms::apply_fn(&argv.payload[1..], &env),
+                            "let*" => break special_forms::apply_let(&argv.payload[1..], &env),
+                            "do" => break special_forms::apply_do(&argv.payload[1..], &env),
+                            "if" => break special_forms::apply_if(&argv.payload[1..], &env),
+                            "fn*" => break special_forms::apply_fn(&argv.payload[1..], &env),
                             // Any other initial symbol will be interpreted a a function call and
                             // handled below
                             "quote" => {
                                 Arity::exactly(1)
                                     .validate_for(argv.payload[1..].len(), "quote")
                                     .map_err(Error::BadArgCount)?;
-                                return Ok(argv.payload[1].clone());
+                                break Ok(argv.payload[1].clone());
                             }
                             "quasiquote" => {
                                 Arity::exactly(1)
@@ -152,7 +143,7 @@ pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
                                 Arity::exactly(1)
                                     .validate_for(argv.payload[1..].len(), "macroexpand")
                                     .map_err(Error::BadArgCount)?;
-                                return macroexpand(&argv.payload[1], &env);
+                                break macroexpand(&argv.payload[1], &env);
                             }
                             "try*" => {
                                 Arity::Between(1..=2)
@@ -170,7 +161,7 @@ pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
                     let evaluated = evaluate_sequence_elementwise(&argv.payload, &env)?;
                     let (callable, args) = evaluated.split_first().unwrap();
                     match apply(callable, args)? {
-                        ApplyOutcome::Finished(obj) => return Ok(obj),
+                        ApplyOutcome::Finished(obj) => break Ok(obj),
                         ApplyOutcome::EvaluateFurther(next_ast, next_env) => {
                             ast = next_ast;
                             env = next_env;
@@ -179,9 +170,13 @@ pub(crate) fn EVAL(orig_ast: &MalObject, orig_env: &Rc<Environment>) -> Result {
                     }
                 }
             },
-            _ => return evaluate_ast(&ast, &env),
+            _ => break evaluate_ast(&ast, &env),
         };
+    };
+    if let Ok(obj) = &result {
+        log::trace!("Call EVAL with {} produced {}", orig_ast, obj);
     }
+    result
 }
 
 // Want to pull out the apply logic so we can use it in core::SWAP.

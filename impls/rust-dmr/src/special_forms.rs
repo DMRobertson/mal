@@ -50,7 +50,7 @@ pub enum LetError {
     BindToNonSymbol,
 }
 
-pub fn apply_let(args: &[MalObject], env: &Rc<Environment>) -> Result<EvalContext> {
+pub fn apply_let(args: &[MalObject], env: &Rc<Environment>) -> Result {
     let (bindings, obj) = match args.len() {
         2 => Ok((&args[0], &args[1])),
         n => Err(Error::Let(LetError::WrongArgCount(n))),
@@ -59,7 +59,7 @@ pub fn apply_let(args: &[MalObject], env: &Rc<Environment>) -> Result<EvalContex
         .as_seq()
         .or(Err(Error::Let(LetError::BindingsNotSequence)))?;
     match bindings.len() % 2 == 0 {
-        true => make_let_environment(bindings, env).and_then(|child| Ok((obj.clone(), child))),
+        true => make_let_environment(bindings, env).and_then(|child| EVAL(obj, &child)),
         false => Err(Error::Let(LetError::BindingsOddLength)),
     }
 }
@@ -100,8 +100,7 @@ pub fn apply_do(args: &[MalObject], env: &Rc<Environment>) -> Result<MalObject> 
     }
     let result: std::result::Result<Vec<MalObject>, _> =
         args.iter().map(|obj| EVAL(obj, env)).collect();
-    // TODO returning a copy here---doesn't feel right
-    Ok(result?.last().unwrap().clone())
+    Ok(result?.pop().unwrap())
 }
 
 pub fn apply_if(args: &[MalObject], env: &Rc<Environment>) -> Result {
